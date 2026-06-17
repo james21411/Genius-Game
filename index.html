@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Genius Jump</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "nipplejs": "https://esm.sh/nipplejs@0.9.0"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Full-screen menu overlay (shows when not playing) -->
+  <div id="menuOverlay" role="dialog" aria-hidden="true">
+    <div class="menu-bg"></div>
+    <div class="menu-panel game-hub" role="menu">
+      <a href="./dashboard/index.html" class="dashboard-link" target="_blank" title="Espace Enseignant">👨‍🏫 Accès Guilde Prof</a>
+      
+      <!-- Student Stats (Pause Menu) -->
+      <div id="menu-xp-display" class="student-stats hidden">
+        <img src="player.png" class="mini-avatar"> 
+        <strong id="pause-student-name">-</strong> | 
+        <img src="coin.png" class="mini-icon"> <strong id="pause-student-xp">0</strong> XP
+      </div>
+
+      <div class="hub-grid">
+        <!-- Colonne Gauche : Profil -->
+        <div class="hub-col profile-col">
+          <h1 class="menu-title">GENIUS<br>JUMP<br><span class="edu-text">EDU</span></h1>
+          <div class="student-login">
+            <div class="login-box">
+              <label>Nom du Héros</label>
+              <input type="text" id="student-name" placeholder="Ex: Léo" class="menu-input">
+            </div>
+            <div class="login-box">
+              <label>Code de Classe</label>
+              <div style="display:flex; gap:5px;">
+                <input type="text" id="class-code" placeholder="Ex: ABCD-1234" class="menu-input">
+                <button id="btn-verify-class" class="arcade-btn blue-btn mini-btn" style="padding:5px 10px !important;">VÉRIFIER</button>
+              </div>
+            </div>
+          </div>
+          <div class="player-preview">
+            <div class="menu-player-sprite"></div>
+          </div>
+        </div>
+
+        <!-- Centre : Sélection Niveau et Modes -->
+        <div class="hub-col center-col">
+          <h2>🎯 QUÊTE DISPONIBLE</h2>
+          <div id="quest-selector-dynamic">
+            <div class="level-selector">
+              <button id="prev-level" class="level-arrow" aria-label="Niveau précédent">&#9664;</button>
+              <span id="level-display" class="level-name">Entrez un code de classe...</span>
+              <button id="next-level" class="level-arrow" aria-label="Niveau suivant">&#9654;</button>
+            </div>
+            <div id="world-details" style="font-family:'VT323'; color:#aaa; text-align:center; margin-top:5px; font-size:18px;">
+              Sujet: -
+            </div>
+          </div>
+
+          <h2>⚔️ MODE DE JEU</h2>
+          <div class="mode-selector">
+            <label class="mode-card">
+              <input type="radio" name="gameMode" value="lesson" checked>
+              <div class="mode-content">
+                <h3>📘 Leçon</h3>
+                <p>Apprends avec des explications (Recommandé)</p>
+              </div>
+            </label>
+            <label class="mode-card">
+              <input type="radio" name="gameMode" value="eval">
+              <div class="mode-content">
+                <h3>🔥 Évaluation</h3>
+                <p>Temps limité, 1 seul essai, punitif !</p>
+              </div>
+            </label>
+            <label class="mode-card">
+              <input type="radio" name="gameMode" value="free">
+              <div class="mode-content">
+                <h3>🌍 Monde Ouvert</h3>
+                <p>Aucun quiz, exploration libre.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Droite : Actions -->
+        <div class="hub-col actions-col">
+          <button id="menu-resume" class="arcade-btn green-btn hidden">REPRENDRE</button>
+          <button id="menu-play" class="arcade-btn green-btn main-play-btn">JOUER ▶</button>
+          
+          <div class="dummy-buttons">
+            <button class="arcade-btn blue-btn dummy-btn" data-feature="Inventaire">🎒 Inventaire</button>
+            <button class="arcade-btn gold-btn dummy-btn" data-feature="Boutique">🛒 Boutique</button>
+            <button class="arcade-btn purple-btn dummy-btn" data-feature="Classement">🏆 Classement</button>
+            <button id="menu-options" class="arcade-btn grey-btn">⚙️ Options</button>
+            <button id="menu-quit" class="arcade-btn grey-btn">🚪 Quitter</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="menu-foot">Flèches ◀▶ pour choisir le niveau • Espace pour sauter/tirer</div>
+    </div>
+  </div>
+
+  <!-- On-screen controls container (mobile) -->
+  <div id="controls">
+    <div id="joy"></div>
+    <button id="jump" aria-label="Saut">▲</button>
+    <div id="hud"></div>
+    <button id="pauseBtn" aria-label="Pause">⏸</button>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

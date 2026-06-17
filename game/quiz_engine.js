@@ -1,0 +1,509 @@
+/*
+  Module: game/quiz_engine.js
+  Gère la logique des questions éducatives intégrées au gameplay.
+  - Overlay canvas (pas de DOM supplémentaire)
+  - Répond aux clics / touches clavier
+  - Communique avec le backend Flask (ou fallback local)
+*/
+
+const API = 'http://localhost:5000/api';
+
+// ── État interne ──────────────────────────────────────────────────────────────
+let _active = false;       // quiz en cours ?
+let _state = 'idle';      // idle|entering|lesson|active|correct|wrong|explaining|exiting
+let _question = null;        // objet question courant
+let _platform = null;        // plateforme qui a déclenché le quiz
+let _timer = 0;           // temps restant (secondes)
+let _startMs = 0;           // Date.now() au début de la question
+let _anim = 0;           // progression animation entrée/sortie (0→1)
+let _attempt = 1;           // 1er ou 2ème essai
+let _chosen = null;        // réponse choisie ('A'|'B'|'C'|'D')
+let _session = null;        // session active { id, student_id, class_id }
+let _xpGained = 0;
+let _questionsTotal = 0;
+let _questionsCorrect = 0;
+let _particles = [];         // confettis/particules de feedback
+let _onComplete = null;      // callback appelé quand la question est terminée
+
+// Pool de questions chargées (depuis API ou fallback local)
+let _questionPool = [];
+let _poolIndex = 0;
+let _nextState = 'active'; // Etat après 'entering'
+
+// ── Couleurs des boutons de réponse ──────────────────────────────────────────
+const BTN_COLORS = {
+  A: { bg: '#e74c3c', hover: '#ff6b6b' },
+  B: { bg: '#2ecc71', hover: '#55e889' },
+  C: { bg: '#3498db', hover: '#5dade2' },
+  D: { bg: '#f39c12', hover: '#f5b942' },
+};
+const ANSWERS = ['A', 'B', 'C', 'D'];
+
+// ── API publique ──────────────────────────────────────────────────────────────
+
+export async function loadQuestions(worldId) {
+  if (!worldId) return;
+  try {
+    const res = await fetch(`${API}/questions?world_id=${worldId}`);
+    if (res.ok) {
+      _questionPool = await res.json();
+      console.log(`[Quiz] ${_questionPool.length} questions chargées depuis API pour monde ${worldId}`);
+      return;
+    }
+  } catch (_) { }
+  // Fallback : charger depuis le JSON local
+  try {
+    const res = await fetch('./data/default_content.json');
+    const data = await res.json();
+    _questionPool = data.questions || [];
+    console.log(`[Quiz] Fallback local : ${_questionPool.length} questions`);
+  } catch (_) {
+    _questionPool = BUILTIN_FALLBACK;
+    console.log('[Quiz] Fallback intégré utilisé');
+  }
+  _poolIndex = 0;
+}
+
+/** Définir la session active (élève connecté) */
+export function setSession(sessionObj) {
+  _session = sessionObj; // { session_id, student_id, class_id, name }
+}
+
+export function getStudentStats() {
+  return { 
+    xp: _xpGained, 
+    total: _questionsTotal, 
+    correct: _questionsCorrect,
+    name: _session ? _session.name : null
+  };
+}
+
+/** Retourne true si un quiz est en cours */
+export function isQuizActive() { return _active; }
+
+/** Retourne le facteur de ralentissement du temps (pour engine.js) */
+export function timeScale() {
+  if (!_active) return 1.0;
+  if (_state === 'entering') return Math.max(0.25, 1 - _anim * 0.75);
+  if (_state === 'exiting') return Math.max(0.25, _anim * 0.75);
+  return 0.25; // SlowMo : temps divisé par 4 selon le plan
+}
+
+/** Déclencher une question sur une plateforme */
+export function triggerQuiz(platform, onComplete) {
+  if (_active) return;
+  if (!_questionPool.length) return;
+
+  // Choisir la prochaine question dans le pool (cyclique)
+  _question = _questionPool[_poolIndex % _questionPool.length];
+  _poolIndex++;
+
+  _platform = platform;
+  _onComplete = onComplete || null;
+  _active = true;
+  _state = 'entering';
+  _anim = 0;
+  _nextState = _question.explanation ? 'lesson' : 'active';
+  _timer = _question.time_limit || 15;
+  _startMs = Date.now();
+  _attempt = 1;
+  _chosen = null;
+  _particles = [];
+
+  // Marquer la plateforme comme "en cours" pour éviter de re-déclencher
+  if (platform) platform._quizTriggered = true;
+}
+
+/** Mise à jour chaque frame — appelée depuis engine.js */
+export function updateQuiz(dt) {
+  if (!_active) return;
+
+  switch (_state) {
+    case 'entering':
+      _anim = Math.min(1, _anim + dt * 4);
+      if (_anim >= 1) { 
+        _state = _nextState; 
+        _anim = 0; 
+        if (_state === 'active') _startMs = Date.now();
+      }
+      break;
+    case 'lesson':
+      break;
+
+    case 'active':
+      _timer -= dt;
+      if (_timer <= 0) _resolveAnswer(null); // temps écoulé → mauvaise réponse
+      break;
+
+    case 'correct':
+    case 'wrong':
+      _anim += dt;
+      // Mettre à jour les particules
+      for (const p of _particles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 400 * dt;
+        p.life -= dt;
+      }
+      _particles = _particles.filter(p => p.life > 0);
+      if (_anim > 0.8) {
+        if (_state === 'wrong' && _attempt < 2) {
+          // 2ème essai
+          _attempt++;
+          _state = 'active';
+          _anim = 0;
+          _timer = Math.max(8, (_question.time_limit || 15) * 0.6);
+        } else {
+          _state = 'explaining';
+          _anim = 0;
+        }
+      }
+      break;
+
+    case 'explaining':
+      _anim += dt;
+      if (_anim > 2.5) _finishQuiz(); // affiche explication 2.5s
+      break;
+
+    case 'exiting':
+      _anim = Math.min(1, _anim + dt * 4);
+      if (_anim >= 1) {
+        _active = false;
+        _state = 'idle';
+        if (_onComplete) _onComplete(_chosen === (_question.correct_answer));
+      }
+      break;
+  }
+}
+
+/** Appelé par les boutons ou touches clavier */
+export function submitAnswer(choice) {
+  if (_state !== 'active') return;
+  _chosen = choice;
+  _resolveAnswer(choice);
+}
+
+// ── Dessin canvas ─────────────────────────────────────────────────────────────
+
+/**
+ * Dessiner l'overlay quiz sur le canvas.
+ * Appeler depuis render.js APRÈS drawEnemies et drawPlayer.
+ */
+export function drawQuiz(ctx, vw, vh) {
+  if (!_active || !_question) return;
+
+  // Slide-in depuis le bas
+  const slideY = _state === 'entering'
+    ? vh * (1 - _easeOut(_anim))
+    : _state === 'exiting'
+      ? vh * _easeIn(_anim)
+      : 0;
+
+  ctx.save();
+  ctx.translate(0, slideY);
+
+  const panelW = Math.min(680, vw - 32);
+  const panelH = 260;
+  const px = (vw - panelW) / 2;
+  const py = vh - panelH - 16;
+
+  // ── Fond du panneau ────────────────────────────────────────────────────────
+  ctx.fillStyle = 'rgba(10, 14, 26, 0.94)';
+  _roundRect(ctx, px, py, panelW, panelH, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#f5c04a';
+  ctx.lineWidth = 2;
+  _roundRect(ctx, px, py, panelW, panelH, 16);
+  ctx.stroke();
+
+  // ── Badge niveau Bloom ─────────────────────────────────────────────────────
+  const bloomLabel = {
+    knowledge: 'Mémorisation', comprehension: 'Compréhension',
+    application: 'Application', analysis: 'Analyse',
+    evaluation: 'Évaluation', creation: 'Création'
+  }[_question.bloom_level] || 'Question';
+  ctx.fillStyle = '#f5c04a';
+  ctx.font = 'bold 11px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`❓ ${bloomLabel}  •  +${_question.xp_reward || 50} XP`, px + 16, py + 20);
+
+  // ── Timer bar ─────────────────────────────────────────────────────────────
+  const maxTime = _question.time_limit || 15;
+  const ratio = Math.max(0, _timer / maxTime);
+  const barW = panelW - 32;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  _roundRect(ctx, px + 16, py + 28, barW, 6, 3); ctx.fill();
+  ctx.fillStyle = ratio > 0.5 ? '#2ecc71' : ratio > 0.25 ? '#f39c12' : '#e74c3c';
+  _roundRect(ctx, px + 16, py + 28, barW * ratio, 6, 3); ctx.fill();
+
+  // ── Texte question ─────────────────────────────────────────────────────────
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.min(18, Math.floor(panelW / 28))}px Inter, sans-serif`;
+  ctx.textAlign = 'center';
+  _wrapText(ctx, _question.question, px + panelW / 2, py + 62, panelW - 32, 22);
+
+  // ── Boutons réponses (2×2) ou Leçon Flash ──
+  if (_state === 'lesson') {
+    ctx.fillStyle = 'rgba(245, 192, 74, 0.1)';
+    ctx.fillRect(px + 10, py + 40, panelW - 20, panelH - 50);
+    ctx.fillStyle = '#f5c04a';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText("💡 LEÇON FLASH", px + panelW / 2, py + 80);
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Inter, sans-serif';
+    _wrapText(ctx, _question.explanation || "", px + panelW / 2, py + 110, panelW - 60, 20);
+
+    // Bouton Commencer
+    const btnW = 160, btnH = 40;
+    const bx = px + (panelW - btnW) / 2, by = py + 200;
+    ctx.fillStyle = '#2ecc71';
+    _roundRect(ctx, bx, by, btnW, btnH, 8); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText("COMMENCER", bx + btnW / 2, by + 25);
+  } else if (_state === 'active' || _state === 'entering') {
+    _drawAnswerButtons(ctx, px, py, panelW);
+  }
+
+  // ── Feedback Correct / Wrong ───────────────────────────────────────────────
+  if (_state === 'correct' || _state === 'wrong') {
+    _drawAnswerButtons(ctx, px, py, panelW, true); // grisé sauf la bonne
+    const ok = _state === 'correct';
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, _anim * 3);
+    ctx.font = `bold ${Math.min(32, vw / 12)}px Inter, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ok ? '#2ecc71' : '#e74c3c';
+    ctx.fillText(ok ? '✓ Bonne réponse !' : '✗ Mauvaise réponse', vw / 2, py - 24);
+    ctx.restore();
+    _drawParticles(ctx);
+  }
+
+  // ── Explication ────────────────────────────────────────────────────────────
+  if (_state === 'explaining' && _question.explanation) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, _anim * 2);
+    ctx.fillStyle = 'rgba(10,14,26,0.96)';
+    _roundRect(ctx, px, py, panelW, panelH, 16); ctx.fill();
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    _roundRect(ctx, px, py, panelW, panelH, 16); ctx.stroke();
+
+    ctx.fillStyle = '#f5c04a';
+    ctx.font = 'bold 13px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💡 Explication', vw / 2, py + 24);
+
+    ctx.fillStyle = '#e6e6e6';
+    ctx.font = `${Math.min(15, panelW / 38)}px Inter, sans-serif`;
+    _wrapText(ctx, _question.explanation, vw / 2, py + 54, panelW - 32, 20);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+/** Enregistrer les clics canvas — appeler depuis main.js */
+export function handleCanvasClick(x, y, vw, vh) {
+  if (_state !== 'active') return;
+  const panelW = Math.min(680, vw - 32);
+  const panelH = 260;
+  const px = (vw - panelW) / 2;
+  const py = vh - panelH - 16;
+
+  const bW = (panelW - 48) / 2;
+  const bH = 36;
+  const bY1 = py + 150;
+  const bY2 = py + 196;
+  const bX1 = px + 16;
+  const bX2 = px + 16 + bW + 16;
+
+  if (_state === 'lesson') {
+    const btnW = 160, btnH = 40;
+    const bx = px + (panelW - btnW) / 2, by = py + 200;
+    if (x >= bx && x <= bx + btnW && y >= by && y <= by + btnH) {
+      _state = 'active';
+      _anim = 0;
+      _startMs = Date.now();
+      return;
+    }
+  }
+
+  const zones = [
+    { key: 'A', x: bX1, y: bY1, w: bW, h: bH },
+    { key: 'B', x: bX2, y: bY1, w: bW, h: bH },
+    { key: 'C', x: bX1, y: bY2, w: bW, h: bH },
+    { key: 'D', x: bX2, y: bY2, w: bW, h: bH },
+  ];
+  for (const z of zones) {
+    if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) {
+      submitAnswer(z.key);
+      return;
+    }
+  }
+}
+
+// ── Fonctions internes ────────────────────────────────────────────────────────
+
+function _resolveAnswer(choice) {
+  const correct = (choice === _question.correct_answer);
+  _state = correct ? 'correct' : 'wrong';
+  _anim = 0;
+  if (correct) {
+    _xpGained += _question.xp_reward || 50;
+    _questionsCorrect++;
+    _spawnConfetti();
+  }
+  _questionsTotal++;
+  _recordAnswerToAPI(choice, correct);
+}
+
+function _finishQuiz() {
+  _state = 'exiting';
+  _anim = 0;
+}
+
+async function _recordAnswerToAPI(choice, isCorrect) {
+  if (!_session) return;
+  const timeTaken = (Date.now() - _startMs) / 1000;
+  try {
+    await fetch(`${API}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: _session.session_id,
+        question_id: _question.id,
+        student_id: _session.student_id,
+        given_answer: choice,
+        is_correct: isCorrect ? 1 : 0,
+        time_taken: timeTaken,
+        attempt_number: _attempt,
+      })
+    });
+  } catch (_) { /* mode hors-ligne ok */ }
+}
+
+function _spawnConfetti() {
+  for (let i = 0; i < 28; i++) {
+    _particles.push({
+      x: Math.random() * 680 + (window.innerWidth - 680) / 2,
+      y: window.innerHeight - 280,
+      vx: (Math.random() - 0.5) * 320,
+      vy: -200 - Math.random() * 200,
+      color: ['#f5c04a', '#2ecc71', '#3498db', '#e74c3c', '#fff'][Math.floor(Math.random() * 5)],
+      size: 5 + Math.random() * 6,
+      life: 0.8 + Math.random() * 0.6,
+    });
+  }
+}
+
+function _drawParticles(ctx) {
+  for (const p of _particles) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, p.life * 2);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+    ctx.restore();
+  }
+}
+
+function _drawAnswerButtons(ctx, px, py, panelW, frozen = false) {
+  const keys = ['A', 'B', 'C', 'D'];
+  const texts = [
+    _question.answer_a || '—',
+    _question.answer_b || '—',
+    _question.answer_c || '—',
+    _question.answer_d || '—',
+  ];
+  const bW = (panelW - 48) / 2;
+  const bH = 36;
+  const bY1 = py + 150;
+  const bY2 = py + 196;
+  const bX1 = px + 16;
+  const bX2 = px + 16 + bW + 16;
+  const positions = [
+    { x: bX1, y: bY1 }, { x: bX2, y: bY1 },
+    { x: bX1, y: bY2 }, { x: bX2, y: bY2 },
+  ];
+
+  keys.forEach((k, i) => {
+    const { x, y } = positions[i];
+    const isCorrect = k === _question.correct_answer;
+    const isChosen = k === _chosen;
+    let bg = BTN_COLORS[k].bg;
+    if (frozen) {
+      bg = isCorrect ? '#2ecc71' : 'rgba(80,80,80,0.7)';
+    }
+    ctx.fillStyle = bg;
+    _roundRect(ctx, x, y, bW, bH, 8); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold 13px Inter, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${k}.`, x + 10, y + bH / 2 + 5);
+    ctx.font = `13px Inter, sans-serif`;
+    const maxLen = bW - 40;
+    let label = texts[i];
+    if (ctx.measureText(label).width > maxLen) {
+      while (ctx.measureText(label + '…').width > maxLen && label.length > 0)
+        label = label.slice(0, -1);
+      label += '…';
+    }
+    ctx.fillText(label, x + 28, y + bH / 2 + 5);
+  });
+}
+
+// ── Helpers canvas ────────────────────────────────────────────────────────────
+function _roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function _wrapText(ctx, text, cx, y, maxW, lineH) {
+  const words = text.split(' ');
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, cx, y);
+      line = word;
+      y += lineH;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, cx, y);
+}
+
+function _easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+function _easeIn(t) { return t * t * t; }
+
+// ── Fallback intégré (si tout échoue) ────────────────────────────────────────
+const BUILTIN_FALLBACK = [
+  {
+    id: 1, question: "Combien font 7 × 8 ?",
+    answer_a: "54", answer_b: "56", answer_c: "63", answer_d: "48",
+    correct_answer: "B", explanation: "7 × 8 = 56",
+    xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
+  },
+  {
+    id: 2, question: "Quel est le dénominateur de 3/4 ?",
+    answer_a: "3", answer_b: "4", answer_c: "7", answer_d: "12",
+    correct_answer: "B", explanation: "Le dénominateur est sous la barre : 4",
+    xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
+  },
+  {
+    id: 3, question: "Capitale de la France ?",
+    answer_a: "Lyon", answer_b: "Paris", answer_c: "Marseille", answer_d: "Bordeaux",
+    correct_answer: "B", explanation: "Paris est la capitale de la France.",
+    xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
+  },
+];

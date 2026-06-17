@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Genius Jump EDU — Guilde du Maître</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  
+  <!-- Overlay d'Authentification (Gamifié) -->
+  <div id="auth-overlay" class="pixel-panel">
+    <div class="auth-box">
+      <h1 class="menu-title">ACCÈS<br>GUILDE</h1>
+      <div id="login-form" class="editor-form">
+        <div class="input-group">
+          <label>Email du Maître</label>
+          <input type="email" id="auth-email" placeholder="maitre@guilde.edu" required>
+        </div>
+        <div class="input-group">
+          <label>Mot de Passe</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required>
+        </div>
+        <div class="action-row">
+          <button id="btn-login" class="arcade-btn">SE CONNECTER</button>
+          <button id="btn-show-register" class="arcade-btn blue-btn">S'INSCRIRE</button>
+        </div>
+      </div>
+
+      <div id="register-form" class="editor-form hidden">
+        <div class="input-group">
+          <label>Nom du Maître</label>
+          <input type="text" id="reg-name" placeholder="Prof. Chen">
+        </div>
+        <div class="input-group">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="chen@guilde.edu">
+        </div>
+        <div class="input-group">
+          <label>Mot de Passe</label>
+          <input type="password" id="reg-password" placeholder="••••••••">
+        </div>
+        <div class="action-row">
+          <button id="btn-register" class="arcade-btn">CRÉER LE COMPTE</button>
+          <button id="btn-show-login" class="arcade-btn grey-btn">RETOUR</button>
+        </div>
+      </div>
+      <div id="auth-feedback" class="feedback-msg"></div>
+    </div>
+  </div>
+
+  <div id="game-app" class="hidden">
+    <!-- Navbar / Guild Banner -->
+    <header class="guild-banner">
+      <div class="banner-left">
+        <img src="../boss1.png" alt="Guild Master" class="avatar-boss">
+        <div class="title-container">
+          <h1 id="teacher-name">LA GUILDE</h1>
+          <span class="subtitle">Maître du Jeu</span>
+        </div>
+      </div>
+      <div class="banner-right">
+        <div class="class-selector">
+          <label>Classe active :</label>
+          <select id="class-select" class="menu-input">
+            <option value="">Chargement...</option>
+          </select>
+          <button id="btn-new-class" class="arcade-btn blue-btn mini-btn">+</button>
+        </div>
+        <div class="class-scroll">
+          <span class="scroll-label">Code d'accès:</span>
+          <strong id="nav-class-code" class="scroll-value">-</strong>
+        </div>
+        <button id="btn-logout" class="arcade-btn grey-btn mini-btn">🚪</button>
+      </div>
+    </header>
+
+    <main class="quest-board">
+      
+      <!-- 1. Stats globales -->
+      <section class="pixel-panel stats-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
+          <h2 class="panel-title" style="margin:0; border:0;">🏆 Trésor de la Guilde</h2>
+          <button id="btn-export" class="arcade-btn mini-btn grey-btn">RAPPORT 📥</button>
+        </div>
+        <div class="stats-row" id="overview-stats">
+          <div class="stat-box">
+            <img src="../player.png" alt="Héros" class="stat-icon">
+            <div class="stat-value" id="stat-active">0</div>
+            <div class="stat-label">Héros Actifs</div>
+          </div>
+          <div class="stat-box">
+            <img src="../coin.png" alt="Pièce" class="stat-icon">
+            <div class="stat-value" id="stat-avg">0%</div>
+            <div class="stat-label">Victoires</div>
+          </div>
+          <div class="stat-box">
+            <img src="../boss3.png" alt="Boss" class="stat-icon">
+            <div class="stat-value" id="stat-sessions">0</div>
+            <div class="stat-label">Quêtes Réussies</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="split-layout">
+        <!-- 3. Liste des élèves -->
+        <section class="pixel-panel students-panel">
+          <h2 class="panel-title">📜 Registre des Héros</h2>
+          <div class="table-wrapper">
+            <table class="rpg-table" id="students-table">
+              <thead>
+                <tr>
+                  <th>Héros</th>
+                  <th>Magot (XP)</th>
+                  <th>Niveau</th>
+                  <th>Précision</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Rempli par JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 2. Heatmap des questions -->
+        <section class="pixel-panel heatmap-panel">
+          <h2 class="panel-title">⚔️ Rapport de Bataille</h2>
+          <div class="table-wrapper">
+            <table class="rpg-table" id="heatmap-table">
+              <thead>
+                <tr>
+                  <th>Épreuve (Question)</th>
+                  <th>Difficulté</th>
+                  <th>Taux de Survie</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Rempli par JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- 4. Le Grimoire (Éditeur Dynamique) -->
+      <section class="pixel-panel editor-panel">
+        <h2 class="panel-title">🪄 Le Grimoire des Épreuves</h2>
+        
+        <div class="grimoire-tabs">
+          <button id="tab-add" class="arcade-btn mini-btn active">FORGER UN SORT</button>
+          <button id="tab-list" class="arcade-btn mini-btn blue-btn">BIBLIOTHÈQUE (<span id="q-count">0</span>)</button>
+          <button id="tab-import" class="arcade-btn mini-btn grey-btn">IMPORTER CSV</button>
+          <button id="tab-ai" class="arcade-btn mini-btn purple-btn">IA MAGIQUE ✨</button>
+        </div>
+
+        <!-- Section: IA Magique -->
+        <div id="ai-section" class="hidden" style="background: rgba(40,0,80,0.3); padding: 20px; border: 2px solid #a569bd; margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px; color: #a569bd;">✨ Alchimie Algorithmique</h3>
+          <p style="font-size: 10px; color: #ccc; margin-bottom: 15px;">Collez votre cours ou support, l'IA forgera les épreuves pour vous.</p>
+          
+          <div class="input-group">
+            <label>Support de Cours (Fichier PDF, TXT ou Texte)</label>
+            <input type="file" id="ai-file" accept=".pdf,.txt" class="menu-input" style="margin-bottom:10px;">
+            <textarea id="ai-context" rows="3" placeholder="...ou collez le texte ici directement"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label>Nombre de Questions</label>
+              <input type="number" id="ai-num" value="5" min="1" max="10">
+            </div>
+            <div class="input-group">
+              <label>Niveau Bloom Max</label>
+              <select id="ai-bloom">
+                <option value="knowledge">LVL 1 - Mémorisation</option>
+                <option value="comprehension">LVL 2 - Compréhension</option>
+                <option value="application">LVL 3 - Application</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Types de Sortilèges</label>
+            <div style="display:flex; gap:15px; font-size:12px; margin-top:5px;">
+              <label style="color:#fff;"><input type="checkbox" checked disabled> QCM</label>
+              <label style="color:#fff;"><input type="checkbox" id="type-vf"> Vrai/Faux</label>
+              <label style="color:#fff;"><input type="checkbox" id="type-open"> Question Ouverte</label>
+            </div>
+          </div>
+
+          <button id="btn-ai-generate" class="arcade-btn purple-btn" style="width:100%; margin-top:15px;">LANCER L'ALCHIMIE ✨</button>
+          <div id="ai-feedback" class="feedback-msg"></div>
+        </div>
+
+        <!-- Section: Import CSV -->
+        <div id="import-section" class="hidden" style="background: rgba(0,0,0,0.4); padding: 20px; border: 2px dashed #666; margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">📥 Importer des Parchemins (CSV)</h3>
+          <p style="font-size: 10px; color: #aaa; margin-bottom: 15px;">Format: question, réponse_a, réponse_b, réponse_c, réponse_d, correct (A/B/C/D), explication</p>
+          <input type="file" id="csv-file" accept=".csv" class="menu-input">
+          <button id="btn-do-import" class="arcade-btn mini-btn" style="margin-top: 10px;">LANCER L'IMPORT</button>
+          <div id="import-feedback" class="feedback-msg"></div>
+        </div>
+
+        <!-- Section: Ajout de Chapitre (Remplace prompt) -->
+        <div id="new-world-section" class="form-row hidden" style="background: rgba(0,0,0,0.4); padding: 15px; margin: 15px 0; border: 2px solid #4a235a;">
+          <div class="input-group">
+            <label>Nom du Chapitre</label>
+            <input type="text" id="new-world-name" placeholder="Ex: Contrôle Maths">
+          </div>
+          <div class="input-group">
+            <label>Sujet Spécifique</label>
+            <input type="text" id="new-world-topic" placeholder="Ex: Géométrie">
+          </div>
+          <div class="input-group" style="flex:0.5; align-self: flex-end;">
+            <button id="btn-save-world" class="arcade-btn mini-btn">CRÉER</button>
+          </div>
+        </div>
+
+        <!-- Section: Formulaire de Question -->
+        <div id="add-q-container">
+          <div class="form-row" style="margin-bottom: 20px;">
+            <div class="input-group">
+              <label>Chapitre Actif (Sélectionner une quête)</label>
+              <select id="q-world" class="menu-input">
+                <option value="">Chargement...</option>
+              </select>
+            </div>
+            <div class="input-group" style="flex:0.3; align-self: flex-end;">
+              <button id="btn-show-new-world" class="arcade-btn blue-btn mini-btn" title="Nouveau Chapitre">+</button>
+            </div>
+          </div>
+
+          <form id="add-question-form" class="editor-form">
+            <div class="form-row">
+              <div class="input-group">
+              <label>Type de Sortilège</label>
+              <select id="q-type">
+                <option value="qcm">QCM (4 choix)</option>
+                <option value="vf">Vrai / Faux</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Domaine (Sujet)</label>
+              <input type="text" id="q-subject" placeholder="ex: Mathématiques">
+            </div>
+              <div class="input-group">
+                <label>Sortilège (Thème)</label>
+                <input type="text" id="q-topic" placeholder="Ex: Fractions" required>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="input-group">
+                <label>Niveau de Pouvoir (Bloom)</label>
+                <select id="q-bloom" required>
+                  <option value="knowledge">LVL 1 - Mémorisation</option>
+                  <option value="comprehension">LVL 2 - Compréhension</option>
+                  <option value="application">LVL 3 - Application</option>
+                  <option value="analysis">LVL 4 - Analyse</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Récompense (XP)</label>
+                <input type="number" id="q-xp" value="50" required>
+              </div>
+            </div>
+            
+            <div class="input-group">
+              <label>L'Énigme du Boss</label>
+              <textarea id="q-text" placeholder="Posez l'énigme ici..." rows="2" required></textarea>
+            </div>
+            
+            <div class="answers-grid">
+              <input type="text" id="q-ans-a" placeholder="A:" required class="ans-a">
+              <input type="text" id="q-ans-b" placeholder="B:" required class="ans-b">
+              <input type="text" id="q-ans-c" placeholder="C:" required class="ans-c">
+              <input type="text" id="q-ans-d" placeholder="D:" required class="ans-d">
+            </div>
+            
+            <div class="form-row bottom-row">
+              <div class="input-group">
+                <label>La Vérité</label>
+                <select id="q-correct" required>
+                  <option value="" disabled selected>Choix...</option>
+                  <option value="A">Porte A</option>
+                  <option value="B">Porte B</option>
+                  <option value="C">Porte C</option>
+                  <option value="D">Porte D</option>
+                </select>
+              </div>
+              <div class="input-group flex-2">
+                <label>Révélation (Si échec)</label>
+                <textarea id="q-exp" placeholder="Explication secrète..." rows="1"></textarea>
+              </div>
+            </div>
+            
+            <div class="action-row">
+              <button type="submit" class="arcade-btn">FORGER L'ÉPREUVE</button>
+              <div id="q-feedback" class="feedback-msg"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Section: Liste des Questions (Bibliothèque) -->
+        <div id="questions-list-container" class="hidden" style="margin-top:20px;">
+          <div class="table-wrapper">
+            <table class="rpg-table" id="all-questions-table">
+              <thead>
+                <tr>
+                  <th>Énigme</th>
+                  <th>Sujet</th>
+                  <th>Bloom</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Rempli par JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
