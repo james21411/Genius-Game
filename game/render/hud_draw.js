@@ -58,6 +58,20 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
     // 1. Draw Ammo box on the top-left
     ctx.save();
     const ammoBoxW = 140;
+    
+    // Draw Level Timer (Top Right, left of Pause button)
+    if (typeof window.levelTimer === 'number') {
+      const minutes = Math.floor(window.levelTimer / 60);
+      const seconds = Math.floor(window.levelTimer % 60).toString().padStart(2, '0');
+      ctx.font = "bold 20px 'Press Start 2P', 'VT323', monospace";
+      ctx.fillStyle = window.levelTimer < 60 ? "#e74c3c" : "#f5c04a"; // Red if < 1 min, else Yellow
+      ctx.textAlign = "right";
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.fillText(`⏱ ${minutes}:${seconds}`, vw - 75, 42);
+    }
     const ammoBoxH = 44;
     ctx.fillStyle = 'rgba(10, 20, 30, 0.75)';
     ctx.strokeStyle = '#f5c04a'; // gold/yellow border to match game style

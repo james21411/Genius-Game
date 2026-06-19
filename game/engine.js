@@ -40,6 +40,7 @@ export function respawn(){
     window.__scoreForRender = 0;
     player.coins = 0;
     player.aiQueries = 1;
+    window.levelTimer = 600; // Reset timer on full restart
   }
 }
 function respawnBrief(){
@@ -96,6 +97,15 @@ function loop(now){
   // Apply quiz time-scale (quasi-pause during active question)
   const dt = rawDt * timeScale();
   updateQuiz(rawDt); // quiz updates at real time
+
+  if (typeof window.levelTimer === 'number') {
+    // Only decrement timer if game is not paused by quiz (dt controls this nicely)
+    window.levelTimer -= dt;
+    if (window.levelTimer <= 0) {
+      window.levelTimer = 0;
+      window.gameState = 'gameover';
+    }
+  }
 
   // horizontal control
   let moveDir = 0;
@@ -346,6 +356,12 @@ function loop(now){
               if(e.hp <= 0){
                 e.dead = true;
                 score += 2000;
+                // Chance to gain time
+                if (Math.random() < 0.35 && typeof window.levelTimer === 'number') {
+                  window.levelTimer += 5 + Math.floor(Math.random() * 6);
+                  // Spawn a floating text for time
+                  floatingAmmoTexts.push({x: e.x + e.w/2, y: e.y - 40, text: "+Temps!", life: 1});
+                }
                 world.coins.push({x: e.x + e.w/2, y: e.y - 24, r: 10, collected:false, isAmmo: true, ammo: 10});
               }
             } else {
@@ -360,6 +376,11 @@ function loop(now){
                   if(e.hp <= 0){
                     e.dead = true;
                     score += 2000;
+                    // Always gain some time on quiz boss kill
+                    if (typeof window.levelTimer === 'number') {
+                      window.levelTimer += 10 + Math.floor(Math.random() * 6);
+                      floatingAmmoTexts.push({x: e.x + e.w/2, y: e.y - 40, text: "+Temps!", life: 1});
+                    }
                     const ammoGain = 8 + Math.floor(Math.random()*8);
                     world.coins.push({x: e.x + e.w/2, y: e.y - 24, r: 10, collected:false, isAmmo: true, ammo: ammoGain});
                   }

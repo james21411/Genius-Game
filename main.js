@@ -142,6 +142,7 @@ async function startGame() {
   player.ammo  = 30;
   player.coins = 0;
   player.aiQueries = 1;
+  window.levelTimer = 600; // 10 minutes par défaut
   window._prevStateBeforePause = null;
   window.gameState = 'playing';
   import('./game/engine.js').then(mod => { if (mod && typeof mod.respawn === 'function') mod.respawn(); });
