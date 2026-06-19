@@ -16,6 +16,25 @@
 <body>
   <canvas id="game"></canvas>
 
+  <!-- Quiz overlay (vrais boutons HTML, au-dessus des contrôles tactiles) -->
+  <div id="quizOverlay" class="hidden" aria-hidden="true">
+    <div class="quiz-panel">
+      <div class="quiz-meta">
+        <span id="quizBloom">Question</span>
+        <span id="quizXp">+50 XP</span>
+      </div>
+      <div class="quiz-timer-track"><div id="quizTimerFill"></div></div>
+      <p id="quizQuestionText"></p>
+      <div id="quizAnswers" class="quiz-answers">
+        <button type="button" class="quiz-answer-btn quiz-btn-a" data-choice="A"><span>A.</span> <span id="quizLabelA"></span></button>
+        <button type="button" class="quiz-answer-btn quiz-btn-b" data-choice="B"><span>B.</span> <span id="quizLabelB"></span></button>
+        <button type="button" class="quiz-answer-btn quiz-btn-c" data-choice="C"><span>C.</span> <span id="quizLabelC"></span></button>
+        <button type="button" class="quiz-answer-btn quiz-btn-d" data-choice="D"><span>D.</span> <span id="quizLabelD"></span></button>
+      </div>
+      <p id="quizHint" class="quiz-hint">Touche 1-4 ou clique une réponse</p>
+    </div>
+  </div>
+
   <!-- Full-screen menu overlay (shows when not playing) -->
   <div id="menuOverlay" role="dialog" aria-hidden="true">
     <div class="menu-bg"></div>

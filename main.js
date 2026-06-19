@@ -4,13 +4,14 @@ import { world, player, makeLevel, setLevel } from './game/level.js';
 import { startEngine } from './game/engine.js';
 import { initRender } from './game/render.js';
 import { TOTAL_LEVELS, getLevelConfig } from './game/difficulty.js';
-import { handleCanvasClick, loadQuestions, setSession, getStudentStats } from './game/quiz_engine.js';
+import { initQuizInput, loadQuestions, setSession, getStudentStats } from './game/quiz_engine.js';
 
 const canvas = document.getElementById('game');
 
 initAssets();
 initControls();
 initRender(canvas, world, player, assets, assetsReady);
+initQuizInput();
 
 // start in menu; engine loop runs only when playing
 window.gameState = 'menu'; // 'menu' | 'playing' | 'gameover'
@@ -234,14 +235,9 @@ pauseBtn.addEventListener('click', ()=>{
   updateMenuVisibility();
 });
 
-// allow clicking canvas when in menu to start as well, or for quiz interaction when playing
+// allow clicking canvas when in menu to start as well
 canvas.addEventListener('click', (e)=>{
   if(window.gameState === 'playing'){
-    // Pass click to quiz engine if active
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    handleCanvasClick(x, y, canvas.clientWidth, canvas.clientHeight);
     return;
   }
   

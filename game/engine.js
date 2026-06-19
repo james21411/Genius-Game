@@ -7,7 +7,7 @@ import { world, player } from './level.js';
 import { input } from './controls.js';
 import { assetsReady } from './assets.js';
 import { draw } from './render.js';
-import { isQuizActive, timeScale, updateQuiz, triggerQuiz, handleCanvasClick } from './quiz_engine.js';
+import { isQuizActive, timeScale, updateQuiz, triggerQuiz } from './quiz_engine.js';
 
 const GRAVITY = 2200;
 const MOVE_ACC = 2600;

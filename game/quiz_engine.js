@@ -6,11 +6,11 @@
   - Communique avec le backend Flask (ou fallback local)
 */
 
-const API = 'http://localhost:5000/api';
+const API = 'http://localhost:5001/api';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _active = false;       // quiz en cours ?
-let _state = 'idle';      // idle|entering|lesson|active|correct|wrong|explaining|exiting
+let _state = 'idle';      // idle|entering|active|correct|wrong|explaining|exiting
 let _question = null;        // objet question courant
 let _platform = null;        // plateforme qui a déclenché le quiz
 let _timer = 0;           // temps restant (secondes)
@@ -28,7 +28,7 @@ let _onComplete = null;      // callback appelé quand la question est terminée
 // Pool de questions chargées (depuis API ou fallback local)
 let _questionPool = [];
 let _poolIndex = 0;
-let _nextState = 'active'; // Etat après 'entering'
+let _overlayReady = false;
 
 // ── Couleurs des boutons de réponse ──────────────────────────────────────────
 const BTN_COLORS = {
@@ -103,12 +103,12 @@ export function triggerQuiz(platform, onComplete) {
   _active = true;
   _state = 'entering';
   _anim = 0;
-  _nextState = _question.explanation ? 'lesson' : 'active';
   _timer = _question.time_limit || 15;
   _startMs = Date.now();
   _attempt = 1;
   _chosen = null;
   _particles = [];
+  _syncOverlay();
 
   // Marquer la plateforme comme "en cours" pour éviter de re-déclencher
   if (platform) platform._quizTriggered = true;
@@ -121,18 +121,18 @@ export function updateQuiz(dt) {
   switch (_state) {
     case 'entering':
       _anim = Math.min(1, _anim + dt * 4);
-      if (_anim >= 1) { 
-        _state = _nextState; 
-        _anim = 0; 
-        if (_state === 'active') _startMs = Date.now();
+      if (_anim >= 1) {
+        _state = 'active';
+        _anim = 0;
+        _startMs = Date.now();
+        _syncOverlay();
       }
-      break;
-    case 'lesson':
       break;
 
     case 'active':
       _timer -= dt;
-      if (_timer <= 0) _resolveAnswer(null); // temps écoulé → mauvaise réponse
+      _syncOverlayTimer();
+      if (_timer <= 0) _resolveAnswer(null);
       break;
 
     case 'correct':
@@ -148,14 +148,15 @@ export function updateQuiz(dt) {
       _particles = _particles.filter(p => p.life > 0);
       if (_anim > 0.8) {
         if (_state === 'wrong' && _attempt < 2) {
-          // 2ème essai
           _attempt++;
           _state = 'active';
           _anim = 0;
           _timer = Math.max(8, (_question.time_limit || 15) * 0.6);
+          _syncOverlay();
         } else {
           _state = 'explaining';
           _anim = 0;
+          _syncOverlay();
         }
       }
       break;
@@ -170,7 +171,8 @@ export function updateQuiz(dt) {
       if (_anim >= 1) {
         _active = false;
         _state = 'idle';
-        if (_onComplete) _onComplete(_chosen === (_question.correct_answer));
+        _syncOverlay();
+        if (_onComplete) _onComplete(_chosen === _normalizeChoice(_question.correct_answer));
       }
       break;
   }
@@ -180,7 +182,92 @@ export function updateQuiz(dt) {
 export function submitAnswer(choice) {
   if (_state !== 'active') return;
   _chosen = choice;
+  document.querySelectorAll('#quizOverlay .quiz-answer-btn').forEach((btn) => {
+    btn.disabled = true;
+  });
   _resolveAnswer(choice);
+}
+
+/** Écoute clavier + boutons HTML overlay */
+export function initQuizInput() {
+  _initOverlayButtons();
+
+  addEventListener('keydown', (e) => {
+    if (!_active || _state !== 'active') return;
+    const keyMap = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' };
+    const choice = keyMap[e.key];
+    if (choice) {
+      submitAnswer(choice);
+      e.preventDefault();
+    }
+  });
+}
+
+function _initOverlayButtons() {
+  if (_overlayReady) return;
+  const overlay = document.getElementById('quizOverlay');
+  if (!overlay) return;
+  overlay.querySelectorAll('.quiz-answer-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_state === 'active') submitAnswer(btn.dataset.choice);
+    });
+  });
+  _overlayReady = true;
+}
+
+function _syncOverlay() {
+  _initOverlayButtons();
+  const overlay = document.getElementById('quizOverlay');
+  const controls = document.getElementById('controls');
+  if (!overlay || !_question) return;
+
+  const interactive = _active && _state === 'active';
+  overlay.classList.toggle('hidden', !interactive);
+  overlay.setAttribute('aria-hidden', interactive ? 'false' : 'true');
+  controls?.classList.toggle('quiz-blocked', interactive);
+
+  if (!interactive) return;
+
+  const bloomLabel = {
+    knowledge: 'Mémorisation', comprehension: 'Compréhension',
+    application: 'Application', analysis: 'Analyse',
+    evaluation: 'Évaluation', creation: 'Création'
+  }[_question.bloom_level] || 'Question';
+
+  document.getElementById('quizBloom').textContent = `❓ ${bloomLabel}`;
+  document.getElementById('quizXp').textContent = `+${_question.xp_reward || 50} XP`;
+  document.getElementById('quizQuestionText').textContent = _question.question;
+
+  const labels = [
+    _question.answer_a || '—',
+    _question.answer_b || '—',
+    _question.answer_c || '—',
+    _question.answer_d || '—',
+  ];
+  ['A', 'B', 'C', 'D'].forEach((k, i) => {
+    const el = document.getElementById(`quizLabel${k}`);
+    if (el) el.textContent = labels[i];
+    const btn = overlay.querySelector(`[data-choice="${k}"]`);
+    if (btn) btn.disabled = false;
+  });
+
+  _syncOverlayTimer();
+}
+
+function _syncOverlayTimer() {
+  const fill = document.getElementById('quizTimerFill');
+  if (!fill || !_question) return;
+  const maxTime = _question.time_limit || 15;
+  const ratio = Math.max(0, _timer / maxTime);
+  fill.style.width = `${ratio * 100}%`;
+  fill.style.background = ratio > 0.5 ? '#2ecc71' : ratio > 0.25 ? '#f39c12' : '#e74c3c';
+}
+
+function _normalizeChoice(choice) {
+  if (choice == null) return '';
+  return String(choice).trim().toUpperCase();
 }
 
 // ── Dessin canvas ─────────────────────────────────────────────────────────────
@@ -192,12 +279,7 @@ export function submitAnswer(choice) {
 export function drawQuiz(ctx, vw, vh) {
   if (!_active || !_question) return;
 
-  // Slide-in depuis le bas
-  const slideY = _state === 'entering'
-    ? vh * (1 - _easeOut(_anim))
-    : _state === 'exiting'
-      ? vh * _easeIn(_anim)
-      : 0;
+  const slideY = _getSlideY(vh);
 
   ctx.save();
   ctx.translate(0, slideY);
@@ -242,26 +324,8 @@ export function drawQuiz(ctx, vw, vh) {
   ctx.textAlign = 'center';
   _wrapText(ctx, _question.question, px + panelW / 2, py + 62, panelW - 32, 22);
 
-  // ── Boutons réponses (2×2) ou Leçon Flash ──
-  if (_state === 'lesson') {
-    ctx.fillStyle = 'rgba(245, 192, 74, 0.1)';
-    ctx.fillRect(px + 10, py + 40, panelW - 20, panelH - 50);
-    ctx.fillStyle = '#f5c04a';
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText("💡 LEÇON FLASH", px + panelW / 2, py + 80);
-    ctx.fillStyle = '#fff';
-    ctx.font = '14px Inter, sans-serif';
-    _wrapText(ctx, _question.explanation || "", px + panelW / 2, py + 110, panelW - 60, 20);
-
-    // Bouton Commencer
-    const btnW = 160, btnH = 40;
-    const bx = px + (panelW - btnW) / 2, by = py + 200;
-    ctx.fillStyle = '#2ecc71';
-    _roundRect(ctx, bx, by, btnW, btnH, 8); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText("COMMENCER", bx + btnW / 2, by + 25);
-  } else if (_state === 'active' || _state === 'entering') {
+  // ── Boutons réponses (2×2) ──
+  if (_state === 'active' || _state === 'entering') {
     _drawAnswerButtons(ctx, px, py, panelW);
   }
 
@@ -303,52 +367,18 @@ export function drawQuiz(ctx, vw, vh) {
   ctx.restore();
 }
 
-/** Enregistrer les clics canvas — appeler depuis main.js */
-export function handleCanvasClick(x, y, vw, vh) {
-  if (_state !== 'active') return;
-  const panelW = Math.min(680, vw - 32);
-  const panelH = 260;
-  const px = (vw - panelW) / 2;
-  const py = vh - panelH - 16;
-
-  const bW = (panelW - 48) / 2;
-  const bH = 36;
-  const bY1 = py + 150;
-  const bY2 = py + 196;
-  const bX1 = px + 16;
-  const bX2 = px + 16 + bW + 16;
-
-  if (_state === 'lesson') {
-    const btnW = 160, btnH = 40;
-    const bx = px + (panelW - btnW) / 2, by = py + 200;
-    if (x >= bx && x <= bx + btnW && y >= by && y <= by + btnH) {
-      _state = 'active';
-      _anim = 0;
-      _startMs = Date.now();
-      return;
-    }
-  }
-
-  const zones = [
-    { key: 'A', x: bX1, y: bY1, w: bW, h: bH },
-    { key: 'B', x: bX2, y: bY1, w: bW, h: bH },
-    { key: 'C', x: bX1, y: bY2, w: bW, h: bH },
-    { key: 'D', x: bX2, y: bY2, w: bW, h: bH },
-  ];
-  for (const z of zones) {
-    if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) {
-      submitAnswer(z.key);
-      return;
-    }
-  }
+/** @deprecated — les réponses passent par l'overlay HTML (#quizOverlay) */
+export function handleCanvasClick() {
+  return false;
 }
 
 // ── Fonctions internes ────────────────────────────────────────────────────────
 
 function _resolveAnswer(choice) {
-  const correct = (choice === _question.correct_answer);
+  const correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);
   _state = correct ? 'correct' : 'wrong';
   _anim = 0;
+  _syncOverlay();
   if (correct) {
     _xpGained += _question.xp_reward || 50;
     _questionsCorrect++;
@@ -361,6 +391,7 @@ function _resolveAnswer(choice) {
 function _finishQuiz() {
   _state = 'exiting';
   _anim = 0;
+  _syncOverlay();
 }
 
 async function _recordAnswerToAPI(choice, isCorrect) {
@@ -481,6 +512,12 @@ function _wrapText(ctx, text, cx, y, maxW, lineH) {
     }
   }
   if (line) ctx.fillText(line, cx, y);
+}
+
+function _getSlideY(vh) {
+  if (_state === 'entering') return vh * (1 - _easeOut(_anim));
+  if (_state === 'exiting') return vh * _easeIn(_anim);
+  return 0;
 }
 
 function _easeOut(t) { return 1 - Math.pow(1 - t, 3); }
