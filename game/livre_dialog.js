@@ -2,13 +2,20 @@ import { getNextQuestionHint } from './quiz_engine.js';
 
 export function initLivreDialog() {
   window.isLivreActive = false;
+  window.collectedHints = window.collectedHints || [];
 
   const overlay = document.getElementById('livreOverlay');
   const textContainer = document.getElementById('livreText');
   const closeBtn = document.getElementById('livreCloseBtn');
   const readBtn = document.getElementById('livreReadBtn');
 
-  if (!overlay || !textContainer || !closeBtn || !readBtn) {
+  // History panel elements
+  const historyToggle = document.getElementById('bookHistoryToggle');
+  const historyPanel = document.getElementById('bookHistoryPanel');
+  const historyClose = document.getElementById('bookHistoryClose');
+  const historyList = document.getElementById('bookHistoryList');
+
+  if (!overlay || !textContainer || !closeBtn || !readBtn || !historyToggle || !historyPanel || !historyClose || !historyList) {
     console.warn("[Livre] Missing DOM elements");
     return;
   }
@@ -24,6 +31,11 @@ export function initLivreDialog() {
     // Fetch details of the upcoming quiz question dynamically
     const info = getNextQuestionHint();
     if (info) {
+      // Add to history list if not already present
+      if (!window.collectedHints.some(h => h.question === info.question)) {
+        window.collectedHints.push(info);
+      }
+
       textContainer.innerHTML = `
         <strong style="color: #8e44ad; font-size: 24px;">CONSEIL DE L'IA :</strong><br>
         <span style="color: #666; font-size: 18px; font-style: italic;">Pour la question : "${info.question}"</span><br><br>
@@ -42,4 +54,27 @@ export function initLivreDialog() {
 
   closeBtn.addEventListener('click', closeDialog);
   readBtn.addEventListener('click', closeDialog);
+
+  // --- History Index Panel Logic ---
+  function updateHistoryList() {
+    if (window.collectedHints.length === 0) {
+      historyList.innerHTML = `<div class="history-empty-state">Aucun grimoire collecté. Explore les niveaux pour trouver des indices !</div>`;
+    } else {
+      historyList.innerHTML = window.collectedHints.map(item => `
+        <div class="history-item">
+          <div class="history-item-q">Q: ${item.question}</div>
+          <div class="history-item-h">💡 ${item.hint}</div>
+        </div>
+      `).join('');
+    }
+  }
+
+  historyToggle.addEventListener('click', () => {
+    updateHistoryList();
+    historyPanel.classList.toggle('hidden');
+  });
+
+  historyClose.addEventListener('click', () => {
+    historyPanel.classList.add('hidden');
+  });
 }

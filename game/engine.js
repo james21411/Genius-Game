@@ -364,8 +364,10 @@ function loop(now){
                     world.coins.push({x: e.x + e.w/2, y: e.y - 24, r: 10, collected:false, isAmmo: true, ammo: ammoGain});
                   }
                 } else {
-                  // Mauvaise réponse : l'élève prend des dégâts
-                  player.lives = Math.max(0, player.lives - 1);
+                  // Mauvaise réponse : en mode leçon on ne perd pas de vie !
+                  if (window.gameMode !== 'lesson') {
+                    player.lives = Math.max(0, player.lives - 1);
+                  }
                   player.invulnerable = 1.2;
                   player.vy = -JUMP_V * 0.4;
                   if(player.lives <= 0) window.gameState = 'gameover';

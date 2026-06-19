@@ -156,9 +156,25 @@
     </div>
   </div>
 
+  <!-- Bouton Historique des Indices -->
+  <button id="bookHistoryToggle" aria-label="Index des Livres" class="history-toggle-btn">
+    <img src="livre1.jpeg" alt="Grimoire" style="width:28px; height:28px; object-fit:cover; border-radius:3px; image-rendering:pixelated;">
+  </button>
+
+  <!-- Panel Historique des Indices (Grimoires) -->
+  <div id="bookHistoryPanel" class="history-panel hidden">
+    <div class="history-header">
+      <span class="history-title">📚 INDEX DES GRIMOIRES</span>
+      <button id="bookHistoryClose" class="history-close-btn">&times;</button>
+    </div>
+    <div id="bookHistoryList" class="history-list">
+      <div class="history-empty-state">Aucun grimoire collecté. Explore les niveaux pour trouver des indices !</div>
+    </div>
+  </div>
+
   <!-- Chatbot IA (Thème Retro Arcade) -->
   <button id="chatbotToggle" aria-label="Ouvrir le Chatbot IA" class="chatbot-toggle-btn">
-    🤖 Aide IA
+    <img src="chatbot.jpeg" alt="Chatbot IA" style="width:28px; height:28px; object-fit:cover; border-radius:3px; image-rendering:pixelated;">
   </button>
 
   <div id="chatbotPanel" class="chatbot-panel hidden">

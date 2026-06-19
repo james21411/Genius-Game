@@ -48,21 +48,48 @@ export async function loadQuestions(worldId) {
   try {
     const res = await fetch(`${API}/questions?world_id=${worldId}`);
     if (res.ok) {
-      _questionPool = await res.json();
-      console.log(`[Quiz] ${_questionPool.length} questions chargées depuis API pour monde ${worldId}`);
+      const apiQuestions = await res.json();
+      // Inject demo questions (TF, Matching, DragDrop) for testing purposes
+      const demoQuestions = BUILTIN_FALLBACK.filter(q => q.type && q.type !== 'qcm');
+      _questionPool = [...apiQuestions, ...demoQuestions];
+      console.log(`[Quiz] ${_questionPool.length} questions chargées (API + Démo)`);
+      _shufflePool();
       return;
     }
   } catch (_) { }
   // Fallback : charger depuis le JSON local
   try {
     const res = await fetch('./data/default_content.json');
+    if (!res.ok) throw new Error('404');
     const data = await res.json();
     _questionPool = data.questions || [];
     console.log(`[Quiz] Fallback local : ${_questionPool.length} questions`);
   } catch (_) {
-    _questionPool = BUILTIN_FALLBACK;
+    _questionPool = [...BUILTIN_FALLBACK]; // copie pour ne pas altérer l'original
     console.log('[Quiz] Fallback intégré utilisé');
   }
+  _shufflePool();
+}
+
+/** Mélange aléatoire du pool, mais garantit que les nouveaux types (TF, Matching, DragDrop) sont au début pour la démo */
+function _shufflePool() {
+  const demoQ = _questionPool.filter(q => q.type && q.type !== 'qcm');
+  const normalQ = _questionPool.filter(q => !q.type || q.type === 'qcm');
+
+  // Mélange les normales
+  for (let i = normalQ.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [normalQ[i], normalQ[j]] = [normalQ[j], normalQ[i]];
+  }
+  
+  // Mélange les démos
+  for (let i = demoQ.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [demoQ[i], demoQ[j]] = [demoQ[j], demoQ[i]];
+  }
+
+  // Les démos en premier !
+  _questionPool = [...demoQ, ...normalQ];
   _poolIndex = 0;
 }
 
@@ -220,7 +247,6 @@ function _initOverlayButtons() {
 }
 
 function _syncOverlay() {
-  _initOverlayButtons();
   const overlay = document.getElementById('quizOverlay');
   const controls = document.getElementById('controls');
   if (!overlay || !_question) return;
@@ -240,20 +266,242 @@ function _syncOverlay() {
 
   document.getElementById('quizBloom').textContent = `❓ ${bloomLabel}`;
   document.getElementById('quizXp').textContent = `+${_question.xp_reward || 50} XP`;
-  document.getElementById('quizQuestionText').textContent = _question.question;
+  
+  const qText = document.getElementById('quizQuestionText');
+  const answersContainer = document.getElementById('quizAnswers');
+  
+  const type = _question.type || 'qcm';
+  
+  if (type === 'qcm') {
+    qText.textContent = _question.question;
+    answersContainer.className = "quiz-answers qcm-layout";
+    answersContainer.style.display = "grid";
+    answersContainer.innerHTML = `
+      <button type="button" class="quiz-answer-btn quiz-btn-a" data-choice="A"><span>A.</span> <span id="quizLabelA"></span></button>
+      <button type="button" class="quiz-answer-btn quiz-btn-b" data-choice="B"><span>B.</span> <span id="quizLabelB"></span></button>
+      <button type="button" class="quiz-answer-btn quiz-btn-c" data-choice="C"><span>C.</span> <span id="quizLabelC"></span></button>
+      <button type="button" class="quiz-answer-btn quiz-btn-d" data-choice="D"><span>D.</span> <span id="quizLabelD"></span></button>
+    `;
+    
+    document.getElementById('quizLabelA').textContent = _question.answer_a || '—';
+    document.getElementById('quizLabelB').textContent = _question.answer_b || '—';
+    document.getElementById('quizLabelC').textContent = _question.answer_c || '—';
+    document.getElementById('quizLabelD').textContent = _question.answer_d || '—';
 
-  const labels = [
-    _question.answer_a || '—',
-    _question.answer_b || '—',
-    _question.answer_c || '—',
-    _question.answer_d || '—',
-  ];
-  ['A', 'B', 'C', 'D'].forEach((k, i) => {
-    const el = document.getElementById(`quizLabel${k}`);
-    if (el) el.textContent = labels[i];
-    const btn = overlay.querySelector(`[data-choice="${k}"]`);
-    if (btn) btn.disabled = false;
-  });
+    answersContainer.querySelectorAll('.quiz-answer-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (_state === 'active') submitAnswer(btn.dataset.choice);
+      });
+    });
+  }
+  else if (type === 'tf') {
+    qText.textContent = _question.question;
+    answersContainer.className = "quiz-answers tf-layout";
+    answersContainer.style.display = "grid";
+    answersContainer.innerHTML = `
+      <button type="button" class="quiz-answer-btn quiz-btn-b" data-choice="VRAI" style="font-size: 18px; text-align: center; justify-content: center; display: flex; align-items: center; gap: 8px;">✓ VRAI</button>
+      <button type="button" class="quiz-answer-btn quiz-btn-a" data-choice="FAUX" style="font-size: 18px; text-align: center; justify-content: center; display: flex; align-items: center; gap: 8px;">✗ FAUX</button>
+    `;
+
+    answersContainer.querySelectorAll('.quiz-answer-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (_state === 'active') submitAnswer(btn.dataset.choice);
+      });
+    });
+  }
+  else if (type === 'matching') {
+    qText.textContent = _question.question || "Associe les correspondances :";
+    
+    const leftItems = _question.left_items || [];
+    const rightItems = _question.right_items || [];
+
+    answersContainer.className = "quiz-answers matching-layout";
+    answersContainer.style.display = "block";
+    
+    let html = `<div style="display: flex; gap: 15px; justify-content: space-between; margin-bottom: 12px;">`;
+    
+    // Left column
+    html += `<div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">`;
+    leftItems.forEach(item => {
+      html += `<button type="button" class="matching-btn left-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 10px; border-radius: 6px; font-family: 'VT323'; font-size: 20px; cursor: pointer; text-align: center; transition: all 0.2s;">${item}</button>`;
+    });
+    html += `</div>`;
+    
+    // Right column
+    html += `<div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">`;
+    rightItems.forEach(item => {
+      html += `<button type="button" class="matching-btn right-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 10px; border-radius: 6px; font-family: 'VT323'; font-size: 20px; cursor: pointer; text-align: center; transition: all 0.2s;">${item}</button>`;
+    });
+    html += `</div>`;
+    
+    html += `</div>`;
+    html += `<button type="button" id="matchingValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;" disabled>VALIDER LES ASSOCIATIONS (0/${leftItems.length})</button>`;
+    
+    answersContainer.innerHTML = html;
+
+    let selectedLeft = null;
+    const currentMatches = {};
+    const matchColors = ['#f1c40f', '#3498db', '#2ecc71', '#9b59b6', '#e67e22'];
+
+    const leftButtons = answersContainer.querySelectorAll('.left-btn');
+    const rightButtons = answersContainer.querySelectorAll('.right-btn');
+    const validateBtn = answersContainer.querySelector('#matchingValidateBtn');
+
+    leftButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        leftButtons.forEach(b => b.style.outline = 'none');
+        selectedLeft = btn.dataset.item;
+        btn.style.outline = '3px solid #f5c04a';
+      });
+    });
+
+    rightButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!selectedLeft) return;
+        
+        const rightItem = btn.dataset.item;
+        
+        for (const key in currentMatches) {
+          if (currentMatches[key] === rightItem) {
+            delete currentMatches[key];
+          }
+        }
+        currentMatches[selectedLeft] = rightItem;
+
+        leftButtons.forEach(b => b.style.outline = 'none');
+        selectedLeft = null;
+
+        const matchedLefts = Object.keys(currentMatches);
+        
+        leftButtons.forEach(b => {
+          b.style.background = '#2c3e50';
+          b.style.borderColor = '#555';
+          const matchIdx = matchedLefts.indexOf(b.dataset.item);
+          if (matchIdx !== -1) {
+            b.style.background = matchColors[matchIdx % matchColors.length];
+            b.style.borderColor = '#000';
+          }
+        });
+
+        rightButtons.forEach(b => {
+          b.style.background = '#2c3e50';
+          b.style.borderColor = '#555';
+          const leftKey = matchedLefts.find(k => currentMatches[k] === b.dataset.item);
+          if (leftKey) {
+            const matchIdx = matchedLefts.indexOf(leftKey);
+            b.style.background = matchColors[matchIdx % matchColors.length];
+            b.style.borderColor = '#000';
+          }
+        });
+
+        const count = Object.keys(currentMatches).length;
+        validateBtn.disabled = count < leftItems.length;
+        validateBtn.textContent = `VALIDER LES ASSOCIATIONS (${count}/${leftItems.length})`;
+      });
+    });
+
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (_state === 'active') submitAnswer(currentMatches);
+    });
+  }
+  else if (type === 'dragdrop') {
+    answersContainer.className = "quiz-answers dragdrop-layout";
+    answersContainer.style.display = "block";
+    
+    const textPattern = _question.text || "";
+    const choices = _question.choices || [];
+    
+    let formattedText = textPattern;
+    const slotCount = (textPattern.match(/\{slot\d+\}/g) || []).length;
+    
+    for (let i = 0; i < slotCount; i++) {
+      formattedText = formattedText.replace(`{slot${i}}`, `
+        <span class="drag-slot" data-slot="${i}" style="display: inline-block; min-width: 90px; height: 28px; border-bottom: 3px solid #f5c04a; background: rgba(255,255,255,0.08); text-align: center; font-weight: bold; color: #ffd700; margin: 0 5px; cursor: pointer; padding: 0 4px; line-height: 28px; border-radius: 4px; vertical-align: middle;">___</span>
+      `);
+    }
+    
+    qText.innerHTML = `<div style="font-size: 20px; line-height: 1.5; color: #fff; margin-bottom: 15px;">${formattedText}</div>`;
+    
+    let html = `<div style="text-align: center; margin: 10px 0; font-size: 16px; color: #aaa;">Sélectionne un mot, puis clique sur l'emplacement (_) :</div>`;
+    html += `<div class="drag-chips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;">`;
+    choices.forEach(word => {
+      html += `<button type="button" class="drag-chip-btn" data-word="${word}" style="background: #34495e; border: 2px solid #000; box-shadow: 2px 2px 0 #000; color: #fff; padding: 6px 12px; border-radius: 4px; font-family: 'VT323'; font-size: 18px; cursor: pointer; transition: all 0.2s;">${word}</button>`;
+    });
+    html += `</div>`;
+    html += `<button type="button" id="dragValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;" disabled>VALIDER LES RÉPONSES</button>`;
+    
+    answersContainer.innerHTML = html;
+
+    let selectedWord = null;
+    const filledSlots = {};
+    
+    const chipBtns = answersContainer.querySelectorAll('.drag-chip-btn');
+    const slotSpans = qText.querySelectorAll('.drag-slot');
+    const validateBtn = answersContainer.querySelector('#dragValidateBtn');
+
+    chipBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        chipBtns.forEach(b => b.style.outline = 'none');
+        selectedWord = btn.dataset.word;
+        btn.style.outline = '3px solid #f5c04a';
+      });
+    });
+
+    slotSpans.forEach(span => {
+      span.addEventListener('click', (e) => {
+        e.preventDefault();
+        const slotIdx = span.dataset.slot;
+        
+        if (filledSlots[slotIdx]) {
+          const oldWord = filledSlots[slotIdx];
+          delete filledSlots[slotIdx];
+          span.textContent = "___";
+          span.style.color = "#ffd700";
+          
+          const chip = Array.from(chipBtns).find(b => b.dataset.word === oldWord);
+          if (chip) {
+            chip.style.opacity = '1';
+            chip.style.pointerEvents = 'auto';
+          }
+        } else if (selectedWord) {
+          filledSlots[slotIdx] = selectedWord;
+          span.textContent = selectedWord;
+          span.style.color = "#2ecc71";
+          
+          const chip = Array.from(chipBtns).find(b => b.dataset.word === selectedWord);
+          if (chip) {
+            chip.style.opacity = '0.3';
+            chip.style.pointerEvents = 'none';
+          }
+          
+          chipBtns.forEach(b => b.style.outline = 'none');
+          selectedWord = null;
+        }
+
+        const count = Object.keys(filledSlots).length;
+        validateBtn.disabled = count < slotSpans.length;
+      });
+    });
+
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (_state === 'active') {
+        const answersArray = [];
+        for (let i = 0; i < slotSpans.length; i++) {
+          answersArray.push(filledSlots[i] || "");
+        }
+        submitAnswer(answersArray);
+      }
+    });
+  }
 
   _syncOverlayTimer();
 }
@@ -326,14 +574,8 @@ export function drawQuiz(ctx, vw, vh) {
   ctx.textAlign = 'center';
   _wrapText(ctx, _question.question, px + panelW / 2, py + 62, panelW - 32, 22);
 
-  // ── Boutons réponses (2×2) ──
-  if (_state === 'active' || _state === 'entering') {
-    _drawAnswerButtons(ctx, px, py, panelW);
-  }
-
   // ── Feedback Correct / Wrong ───────────────────────────────────────────────
   if (_state === 'correct' || _state === 'wrong') {
-    _drawAnswerButtons(ctx, px, py, panelW, true); // grisé sauf la bonne
     const ok = _state === 'correct';
     ctx.save();
     ctx.globalAlpha = Math.min(1, _anim * 3);
@@ -377,7 +619,30 @@ export function handleCanvasClick() {
 // ── Fonctions internes ────────────────────────────────────────────────────────
 
 function _resolveAnswer(choice) {
-  const correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);
+  const type = _question.type || 'qcm';
+  let correct = false;
+
+  if (type === 'qcm') {
+    correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);
+  } else if (type === 'tf') {
+    // choice is 'VRAI' or 'FAUX', correct_answer is 'VRAI' or 'FAUX'
+    correct = String(choice).toUpperCase() === String(_question.correct_answer).toUpperCase();
+  } else if (type === 'matching') {
+    // choice is an object {leftItem: rightItem}
+    // correct_answer is also an object {leftItem: rightItem}
+    const expected = _question.correct_answer || {};
+    correct = typeof choice === 'object' && choice !== null &&
+      Object.keys(expected).every(k => String(choice[k]).trim() === String(expected[k]).trim());
+  } else if (type === 'dragdrop') {
+    // choice is an array of filled words per slot
+    // correct_answer is an array of expected words
+    const expected = _question.correct_answer || [];
+    correct = Array.isArray(choice) &&
+      expected.every((ans, i) => String(choice[i]).trim().toLowerCase() === String(ans).trim().toLowerCase());
+  } else {
+    correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);
+  }
+
   _state = correct ? 'correct' : 'wrong';
   _anim = 0;
   _syncOverlay();
@@ -386,7 +651,7 @@ function _resolveAnswer(choice) {
     _questionsCorrect++;
     _spawnConfetti();
   } else {
-    if (player && typeof player.lives === 'number') {
+    if (window.gameMode !== 'lesson' && player && typeof player.lives === 'number') {
       player.lives = Math.max(0, player.lives - 1);
       if (player.lives <= 0) {
         window.gameState = 'gameover';
@@ -534,23 +799,67 @@ function _easeIn(t) { return t * t * t; }
 
 // ── Fallback intégré (si tout échoue) ────────────────────────────────────────
 const BUILTIN_FALLBACK = [
+  // ── QCM (Choix Multiple) ────────────────────────────────────────────────────
   {
-    id: 1, question: "Combien font 7 × 8 ?",
+    id: 1, type: 'qcm', question: "Combien font 7 × 8 ?",
     answer_a: "54", answer_b: "56", answer_c: "63", answer_d: "48",
-    correct_answer: "B", explanation: "7 × 8 = 56",
+    correct_answer: "B", explanation: "7 × 8 = 56. Les tables de multiplication sont essentielles !",
     xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
   },
   {
-    id: 2, question: "Quel est le dénominateur de 3/4 ?",
-    answer_a: "3", answer_b: "4", answer_c: "7", answer_d: "12",
-    correct_answer: "B", explanation: "Le dénominateur est sous la barre : 4",
+    id: 2, type: 'qcm', question: "Quelle est la capitale de l'Algérie ?",
+    answer_a: "Oran", answer_b: "Annaba", answer_c: "Alger", answer_d: "Tlemcen",
+    correct_answer: "C", explanation: "Alger est la capitale et la plus grande ville d'Algérie.",
     xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
   },
+  // ── Vrai ou Faux ─────────────────────────────────────────────────────────────
   {
-    id: 3, question: "Capitale de la France ?",
-    answer_a: "Lyon", answer_b: "Paris", answer_c: "Marseille", answer_d: "Bordeaux",
-    correct_answer: "B", explanation: "Paris est la capitale de la France.",
-    xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
+    id: 3, type: 'tf', question: "La Terre est plus grande que le Soleil.",
+    correct_answer: "FAUX",
+    explanation: "FAUX ! Le Soleil a un diamètre 109 fois plus grand que celui de la Terre.",
+    xp_reward: 40, time_limit: 10, bloom_level: "knowledge"
+  },
+  {
+    id: 4, type: 'tf', question: "L'eau bout à 100°C à pression atmosphérique normale.",
+    correct_answer: "VRAI",
+    explanation: "VRAI ! À 1 atm (pression standard), l'eau se transforme en vapeur à 100°C.",
+    xp_reward: 40, time_limit: 10, bloom_level: "knowledge"
+  },
+  // ── Correspondances (Matching) ────────────────────────────────────────────────
+  {
+    id: 5, type: 'matching', question: "Associe chaque animal à son habitat :",
+    left_items: ["Poisson", "Aigle", "Taupe"],
+    right_items: ["Ciel", "Eau", "Terre"],
+    correct_answer: { "Poisson": "Eau", "Aigle": "Ciel", "Taupe": "Terre" },
+    explanation: "Le poisson vit dans l'eau, l'aigle vole dans le ciel, la taupe creuse dans la terre.",
+    xp_reward: 80, time_limit: 25, bloom_level: "comprehension"
+  },
+  {
+    id: 6, type: 'matching', question: "Associe chaque pays à sa capitale :",
+    left_items: ["France", "Maroc", "Espagne"],
+    right_items: ["Madrid", "Paris", "Rabat"],
+    correct_answer: { "France": "Paris", "Maroc": "Rabat", "Espagne": "Madrid" },
+    explanation: "Paris = France, Rabat = Maroc, Madrid = Espagne.",
+    xp_reward: 80, time_limit: 25, bloom_level: "knowledge"
+  },
+  // ── Glisser-Déposer / Texte à trous (Drag & Drop) ───────────────────────────
+  {
+    id: 7, type: 'dragdrop',
+    question: "Complète la formule : {slot0} + {slot1} = Eau (H₂O)",
+    text: "{slot0} + {slot1} = Eau (H₂O)",
+    choices: ["Oxygène", "Hydrogène", "Carbone", "Azote"],
+    correct_answer: ["Hydrogène", "Oxygène"],
+    explanation: "L'eau (H₂O) est formée de deux atomes d'Hydrogène et un atome d'Oxygène.",
+    xp_reward: 100, time_limit: 30, bloom_level: "application"
+  },
+  {
+    id: 8, type: 'dragdrop',
+    question: "Ordonne les planètes du Soleil : {slot0}, {slot1}, Terre",
+    text: "{slot0}, {slot1}, Terre",
+    choices: ["Mars", "Mercure", "Jupiter", "Vénus"],
+    correct_answer: ["Mercure", "Vénus"],
+    explanation: "L'ordre est Mercure, Vénus, Terre, Mars... en partant du Soleil.",
+    xp_reward: 100, time_limit: 30, bloom_level: "knowledge"
   },
 ];
 
