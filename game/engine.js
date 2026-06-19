@@ -8,6 +8,7 @@ import { input } from './controls.js';
 import { assetsReady } from './assets.js';
 import { draw } from './render.js';
 import { isQuizActive, timeScale, updateQuiz, triggerQuiz } from './quiz_engine.js';
+import { playJump, playCollect, startMusic, pauseMusic, stopMusic } from './sound.js';
 
 const GRAVITY = 2200;
 const MOVE_ACC = 2600;
@@ -81,6 +82,11 @@ function loop(now){
 
   // if not playing, only render (keeps canvas interactive for menu/gameover)
   if(window.gameState && window.gameState !== 'playing'){
+    if (window.gameState === 'gameover') {
+      stopMusic();
+    } else {
+      pauseMusic();
+    }
     if(player.invulnerable > 0) player.invulnerable -= rawDt;
     draw();
     requestAnimationFrame(loop);
@@ -93,6 +99,9 @@ function loop(now){
     requestAnimationFrame(loop);
     return;
   }
+
+  // Ensure game music is playing when active
+  startMusic();
 
   // Apply quiz time-scale (quasi-pause during active question)
   const dt = rawDt * timeScale();
@@ -129,11 +138,13 @@ function loop(now){
       player.grounded = false;
       player._jumpHold = JUMP_HOLD_TIME;
       player._jumpCount = 1;
+      playJump();
     } else if((player._jumpCount || 0) < 2){
       // mid-air double jump (slightly reduced power)
       player.vy = -JUMP_V * 0.82;
       player._jumpHold = JUMP_HOLD_TIME * 0.6;
       player._jumpCount = (player._jumpCount || 0) + 1;
+      playJump();
     }
   } else if(jumpPressed && player._jumpHold > 0 && player.vy < 0){
     // holding jump prolongs upward velocity a bit
@@ -419,6 +430,7 @@ function loop(now){
     if(!c.collected && rectsOverlap({x: c.x - c.r, y: c.y - c.r, w: c.r*2, h: c.r*2}, pbox)){
       c.collected = true;
       player.collectTimer = 0.5; // Trigger player collect animation
+      playCollect();
       
       if(c.isHeart){
         // Heart: +1 life (up to 5 max for balance)

@@ -7,6 +7,7 @@
 */
 
 import { player } from './level.js';
+import { playLose } from './sound.js';
 
 const API = 'http://localhost:5001/api';
 
@@ -651,6 +652,7 @@ function _resolveAnswer(choice) {
     _questionsCorrect++;
     _spawnConfetti();
   } else {
+    playLose();
     if (window.gameMode !== 'lesson' && player && typeof player.lives === 'number') {
       player.lives = Math.max(0, player.lives - 1);
       if (player.lives <= 0) {
