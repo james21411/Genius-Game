@@ -23,6 +23,7 @@ let score = 0;
 // player shooting / ammo
 player.ammo = player.ammo || 30;
 let floatingAmmoTexts = []; // temporary floating pickup text
+window.floatingAmmoTexts = floatingAmmoTexts;
 // track jump button previous state to detect presses for double-jump
 let _prevJumpPressed = false;
 
@@ -34,6 +35,12 @@ export function respawn(){
   player.x = 100;
   player.y = 360;
   player.vx = 0; player.vy = 0;
+  if (player.lives === 3) {
+    score = 0;
+    window.__scoreForRender = 0;
+    player.coins = 0;
+    player.aiQueries = 1;
+  }
 }
 function respawnBrief(){
   respawn();
@@ -74,6 +81,13 @@ function loop(now){
   // if not playing, only render (keeps canvas interactive for menu/gameover)
   if(window.gameState && window.gameState !== 'playing'){
     if(player.invulnerable > 0) player.invulnerable -= rawDt;
+    draw();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // If Book overlay is active, pause the gameplay updates
+  if(window.isLivreActive){
     draw();
     requestAnimationFrame(loop);
     return;
@@ -393,8 +407,26 @@ function loop(now){
         player.ammo = (player.ammo || 0) + gained;
         floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '+' + gained + ' BALLES'});
       } else {
-        // Normal Coin: +100 score
+        // Normal Coin: +100 score & +1 coin
         score += 100;
+        player.coins = (player.coins || 0) + 1;
+        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '+1 🪙'});
+      }
+    }
+  }
+
+  // book (livre) pickups — open hint/explanation dialog
+  if (world.livres) {
+    for (const livre of world.livres) {
+      if (!livre.collected && rectsOverlap(
+        {x: livre.x - livre.r, y: livre.y - livre.r, w: livre.r*2, h: livre.r*2}, pbox
+      )) {
+        livre.collected = true;
+        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.4, text: '📖 INDICE !'});
+        // Fire event to open the hint dialog
+        window.dispatchEvent(new CustomEvent('livre-collected', {
+          detail: { x: livre.x, y: livre.y }
+        }));
       }
     }
   }
@@ -404,11 +436,15 @@ function loop(now){
     t.t -= dt;
   }
   floatingAmmoTexts = floatingAmmoTexts.filter(t=>t.t > 0);
+  window.floatingAmmoTexts = floatingAmmoTexts;
 
   if(player.invulnerable > 0) player.invulnerable -= dt;
   if(player.collectTimer > 0) player.collectTimer -= dt;
 
 
+
+  // update score for render
+  window.__scoreForRender = score;
 
   // draw (render module)
   draw();

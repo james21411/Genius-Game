@@ -291,6 +291,28 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
     }
   }
 
+  function drawLivres(camX, camY, useTextures){
+    if(!world.livres) return;
+    for(const l of world.livres){
+      if(l.collected) continue;
+      const lx = Math.round(l.x - camX);
+      const ly = Math.round(l.y - camY);
+      
+      if(useTextures && assets.livre && assets.livre.width){
+        // Draw the book icon (36x36 pixels, centered)
+        ctx.drawImage(assets.livre, lx - 18, ly - 18, 36, 36);
+      } else {
+        // Fallback vector drawing (a nice blue/gold book)
+        ctx.save();
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(lx - 12, ly - 16, 24, 32);
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(lx - 10, ly - 12, 4, 24);
+        ctx.restore();
+      }
+    }
+  }
+
   function drawEnemies(camX, camY, useTextures){
     const now = performance.now();
     for(const e of world.enemies){
@@ -385,6 +407,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
     drawBanners,
     drawPlatforms,
     drawCoins,
+    drawLivres,
     drawEnemies,
     drawOverlay
   };

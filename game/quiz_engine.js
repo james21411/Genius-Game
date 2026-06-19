@@ -6,6 +6,8 @@
   - Communique avec le backend Flask (ou fallback local)
 */
 
+import { player } from './level.js';
+
 const API = 'http://localhost:5001/api';
 
 // ── État interne ──────────────────────────────────────────────────────────────
@@ -383,6 +385,13 @@ function _resolveAnswer(choice) {
     _xpGained += _question.xp_reward || 50;
     _questionsCorrect++;
     _spawnConfetti();
+  } else {
+    if (player && typeof player.lives === 'number') {
+      player.lives = Math.max(0, player.lives - 1);
+      if (player.lives <= 0) {
+        window.gameState = 'gameover';
+      }
+    }
   }
   _questionsTotal++;
   _recordAnswerToAPI(choice, correct);
@@ -544,3 +553,21 @@ const BUILTIN_FALLBACK = [
     xp_reward: 50, time_limit: 15, bloom_level: "knowledge"
   },
 ];
+
+export function getNextQuestionHint() {
+  const pool = (_questionPool && _questionPool.length > 0) ? _questionPool : BUILTIN_FALLBACK;
+  if (pool && pool.length > 0) {
+    const nextQ = pool[_poolIndex % pool.length];
+    if (nextQ) {
+      return {
+        question: nextQ.question,
+        hint: nextQ.explanation || `Indice de l'IA : Révise bien le sujet de la question suivante : "${nextQ.question}"`
+      };
+    }
+  }
+  return {
+    question: "Générale",
+    hint: "Indice : Récolte les pièces et les cibles pour améliorer ton score et préparer tes examens !"
+  };
+}
+

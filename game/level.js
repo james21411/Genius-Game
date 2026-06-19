@@ -11,6 +11,7 @@ export const world = {
   platforms: [],
   enemies: [],
   coins: [],
+  livres: [],    // book pickup objects (hint/explanation items)
   projectiles: [],
   bannerMap: [] // random banner index per village (filled by makeLevel)
 };
@@ -47,6 +48,7 @@ export function makeLevel(){
   world.platforms = [];
   world.enemies = [];
   world.coins = [];
+  world.livres = [];
   world.projectiles = [];
 
   const cfg = currentLevelConfig;
@@ -163,6 +165,17 @@ export function makeLevel(){
           flying: etype.startsWith('fly')
         });
       }
+      // Book spawn: 1 per village every 3 villages, placed above the first platform
+      // so the player has time to read hints before reaching the quiz platform
+      if (i === 1 && v % 3 === 0 && window.gameMode !== 'free') {
+        world.livres.push({
+          x: x + w / 2,
+          y: y - 52,
+          r: 18,         // collision radius
+          collected: false
+        });
+      }
+
       x += w + gap;
     }
 

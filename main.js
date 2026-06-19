@@ -5,6 +5,8 @@ import { startEngine } from './game/engine.js';
 import { initRender } from './game/render.js';
 import { TOTAL_LEVELS, getLevelConfig } from './game/difficulty.js';
 import { initQuizInput, loadQuestions, setSession, getStudentStats } from './game/quiz_engine.js';
+import { initChatbot } from './game/chatbot.js';
+import { initLivreDialog } from './game/livre_dialog.js';
 
 const canvas = document.getElementById('game');
 
@@ -12,6 +14,8 @@ initAssets();
 initControls();
 initRender(canvas, world, player, assets, assetsReady);
 initQuizInput();
+initChatbot();
+initLivreDialog();
 
 // start in menu; engine loop runs only when playing
 window.gameState = 'menu'; // 'menu' | 'playing' | 'gameover'
@@ -136,6 +140,8 @@ async function startGame() {
   makeLevel();
   player.lives = 3;
   player.ammo  = 30;
+  player.coins = 0;
+  player.aiQueries = 1;
   window._prevStateBeforePause = null;
   window.gameState = 'playing';
   import('./game/engine.js').then(mod => { if (mod && typeof mod.respawn === 'function') mod.respawn(); });

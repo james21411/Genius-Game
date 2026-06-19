@@ -16,6 +16,7 @@ export function makeDrawHelpers(opts){
     drawBanners: worldDraw.drawBanners,
     drawPlatforms: worldDraw.drawPlatforms,
     drawCoins: worldDraw.drawCoins,
+    drawLivres: worldDraw.drawLivres,
     drawEnemies: worldDraw.drawEnemies,
     drawProjectiles: entitiesDraw.drawProjectiles,
     drawPlayer: entitiesDraw.drawPlayer,

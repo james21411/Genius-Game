@@ -13,7 +13,8 @@ export const assets = {
   banners: [],
   projectilePlayer: new Image(),
   digits: new Image(),
-  bosses: []
+  bosses: [],
+  livre: new Image()
 };
 
 let assetsLoaded = 0;
@@ -50,7 +51,8 @@ const assetList = [
   {key: 'boss2', src: 'boss2.png'},
   {key: 'boss3', src: 'boss3.png'},
   {key: 'boss4', src: 'boss4.png'},
-  {key: 'boss5', src: 'boss5.png'}
+  {key: 'boss5', src: 'boss5.png'},
+  {key: 'livre', img: assets.livre, src: 'livre1.jpeg'}
 ];
 
 export function initAssets(){

@@ -137,6 +137,54 @@
     <button id="pauseBtn" aria-label="Pause">⏸</button>
   </div>
 
+  <!-- Modal d'indices du Livre -->
+  <div id="livreOverlay" class="hidden">
+    <div class="livre-content">
+      <div class="livre-header">
+        <span class="livre-title">📖 GRIMOIRE DE CONNAISSANCES</span>
+        <button id="livreCloseBtn" class="livre-close-btn">&times;</button>
+      </div>
+      <div class="livre-body">
+        <img src="livre1.jpeg" class="livre-large-img" alt="Livre">
+        <div class="livre-text-box">
+          <p id="livreText">Chargement des explications et indices de l'IA...</p>
+        </div>
+      </div>
+      <div class="livre-footer">
+        <button id="livreReadBtn" class="arcade-btn green-btn">J'AI COMPRIS !</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chatbot IA (Thème Retro Arcade) -->
+  <button id="chatbotToggle" aria-label="Ouvrir le Chatbot IA" class="chatbot-toggle-btn">
+    🤖 Aide IA
+  </button>
+
+  <div id="chatbotPanel" class="chatbot-panel hidden">
+    <div class="chatbot-header">
+      <span class="chatbot-title">👾 COMPAGNON GENIUS</span>
+      <button id="chatbotClose" class="chatbot-close-btn">&times;</button>
+    </div>
+    
+    <div class="chatbot-shop-bar">
+      <span id="chatbotQueriesCount">💬 1 Question</span>
+      <button id="btnBuyQuery" class="chatbot-buy-btn">🛒 +1 Question (5 🪙)</button>
+    </div>
+
+    <div id="chatbotMessages" class="chatbot-messages">
+      <div class="chat-message bot">
+        <div class="chat-sender">BOT</div>
+        <div class="chat-bubble">Salut Héros ! Collecte 5 pièces d'or (🪙) et achète-moi des requêtes pour me poser des questions sur tes devoirs ou le jeu !</div>
+      </div>
+    </div>
+
+    <form id="chatbotForm" class="chatbot-input-area">
+      <input type="text" id="chatbotInput" placeholder="Pose-moi une question..." autocomplete="off" class="chatbot-input" required>
+      <button type="submit" id="chatbotSend" class="chatbot-send-btn">POSER</button>
+    </form>
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>

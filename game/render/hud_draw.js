@@ -52,56 +52,109 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
     const { vw } = getCanvasSize();
     const ammoX = 14;
     const ammoY = 14;
-    const ammoDigits = String(player.ammo || 0);
     const scoreValue = Math.max(0, typeof window.__scoreForRender === 'number' ? window.__scoreForRender : 0);
     const livesValue = Math.max(0, player.lives || 0);
 
-    function drawNumberString(str, tx, ty, targetH = 40, spacing = 6){
-      if(!(assets.digits && assets.digits.width && assets.digits.height)) return;
-      const srcDigitW = Math.floor(assets.digits.width / 10);
-      const srcDigitH = assets.digits.height;
-      const targetW = Math.floor(targetH * (srcDigitW / srcDigitH));
-      let dx = tx;
-      for(const ch of str){
-        const n = Math.max(0, Math.min(9, parseInt(ch) || 0));
-        ctx.drawImage(assets.digits, n*srcDigitW, 0, srcDigitW, srcDigitH, dx, ty, targetW, targetH);
-        dx += targetW + spacing;
-      }
-      return dx - tx;
-    }
+    // 1. Draw Ammo box on the top-left
+    ctx.save();
+    const ammoBoxW = 140;
+    const ammoBoxH = 44;
+    ctx.fillStyle = 'rgba(10, 20, 30, 0.75)';
+    ctx.strokeStyle = '#f5c04a'; // gold/yellow border to match game style
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    roundRect(ctx, ammoX, ammoY, ammoBoxW, ammoBoxH, 10, true, true);
+    ctx.shadowBlur = 0; // reset shadow
 
-    const ammoH = 48;
-    const ammoWdraw = drawNumberString(ammoDigits, ammoX + 6, ammoY, ammoH, 6);
-    const iconSize = 40;
-    const fx = ammoX + 12 + ammoWdraw;
-    const fy = ammoY + 4;
+    // Ammo icon
+    const iconSize = 28;
+    const iconX = ammoX + 10;
+    const iconY = ammoY + (ammoBoxH - iconSize) / 2;
     if(assets.projectilePlayer && assets.projectilePlayer.width){
-      ctx.drawImage(assets.projectilePlayer, 0, 0, assets.projectilePlayer.width, assets.projectilePlayer.height, fx, fy, iconSize, iconSize);
+      ctx.drawImage(assets.projectilePlayer, 0, 0, assets.projectilePlayer.width, assets.projectilePlayer.height, iconX, iconY, iconSize, iconSize);
     } else {
-      drawFlameIcon(ctx, fx + iconSize/2, fy + iconSize/2, 12);
+      drawFlameIcon(ctx, iconX + iconSize/2, iconY + iconSize/2, 9);
     }
 
-    if(typeof floatingAmmoTexts !== 'undefined'){
-      ctx.font = '18px sans-serif';
-      for(const ft of floatingAmmoTexts || []){
+    // Ammo text (beautiful color & retro font with spacing)
+    ctx.fillStyle = '#ffd188'; // Warm orange-gold
+    ctx.font = 'bold 22px "VT323", "Press Start 2P", monospace';
+    ctx.letterSpacing = '2px';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${player.ammo || 0}`, iconX + iconSize + 12, ammoY + ammoBoxH / 2 + 1);
+    ctx.restore();
+
+    // 1b. Draw Coins box on the top-left (below Ammo Box)
+    ctx.save();
+    const coinBoxX = 14;
+    const coinBoxY = 66;
+    const coinBoxW = 140;
+    const coinBoxH = 44;
+    ctx.fillStyle = 'rgba(10, 20, 30, 0.75)';
+    ctx.strokeStyle = '#ffd700'; // Gold border for coins
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    roundRect(ctx, coinBoxX, coinBoxY, coinBoxW, coinBoxH, 10, true, true);
+    ctx.shadowBlur = 0; // reset shadow
+
+    // Coin icon
+    const coinIconSize = 24;
+    const coinIconX = coinBoxX + 12;
+    const coinIconY = coinBoxY + (coinBoxH - coinIconSize) / 2;
+    if(assets.coin && assets.coin.width){
+      ctx.drawImage(assets.coin, 0, 0, assets.coin.width, assets.coin.height, coinIconX, coinIconY, coinIconSize, coinIconSize);
+    } else {
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(coinIconX + coinIconSize/2, coinIconY + coinIconSize/2, 10, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Coin text (beautiful color & retro font with spacing)
+    ctx.fillStyle = '#ffd700'; // Gold color
+    ctx.font = 'bold 22px "VT323", "Press Start 2P", monospace';
+    ctx.letterSpacing = '2px';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${player.coins || 0}`, coinIconX + coinIconSize + 14, coinBoxY + coinBoxH / 2 + 1);
+    ctx.restore();
+
+    // 2. Draw Floating ammo/life pick-up texts (beautiful color & retro font with spacing)
+    if(window.floatingAmmoTexts){
+      ctx.save();
+      ctx.font = 'bold 20px "VT323", "Press Start 2P", sans-serif';
+      ctx.letterSpacing = '2px';
+      for(const ft of window.floatingAmmoTexts || []){
         const alpha = Math.max(0, Math.min(1, ft.t));
-        ctx.fillStyle = `rgba(255,240,180,${alpha})`;
+        ctx.fillStyle = `rgba(255, 230, 100, ${alpha})`;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
         ctx.fillText(ft.text, Math.round(ft.x - camX), Math.round(ft.y - camY - (1-ft.t)*30));
       }
+      ctx.restore();
     }
 
-    // Draw centered hearts (avoid top-right pause button area)
-    const heartSize = 28; // increased size
+    // 3. Draw Centered Hearts
+    const heartSize = 28;
     const heartGap = 12;
     const heartsCount = Math.max(0, player.lives);
     const totalWidth = heartsCount * heartSize + Math.max(0, heartsCount - 1) * heartGap;
     const heartStartX = Math.round(vw/2 - totalWidth/2);
-    const heartY = 18; // top offset (keeps them away from the pause button on the right)
+    const heartY = 18;
 
     for(let i = 0; i < heartsCount; i++){
       const hx = heartStartX + i*(heartSize + heartGap);
       ctx.save();
       ctx.translate(hx, heartY);
+      
+      // Shadow for hearts
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+
       ctx.beginPath();
       ctx.moveTo(heartSize/2, heartSize/1.2);
       ctx.bezierCurveTo(heartSize/2 + 8, heartSize/1.6, heartSize + 2, heartSize/3, heartSize/2, heartSize/6);
@@ -112,14 +165,25 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
       ctx.restore();
     }
 
-    // Score stays centered below the hearts
-    const scoreStr = String(scoreValue);
-    const scoreH = 36;
-    const scoreX = Math.round(vw/2 - 40);
-    const scoreY = 64; // moved down so it doesn't overlap hearts
-    drawNumberString(scoreStr, scoreX, scoreY, scoreH, 4);
+    // 4. Draw Numeric Life Points just below the hearts (using Press Start 2P with vertical spacing & letterSpacing)
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 1;
 
-    // remove right-aligned 'V:' label and numeric lives rendering (hearts now represent lives)
+    ctx.font = 'bold 16px "Press Start 2P", monospace';
+    ctx.letterSpacing = '3px';
+    ctx.fillStyle = '#ff6b6b'; // Light coral red
+    ctx.fillText(`${livesValue} PV`, Math.round(vw/2), heartY + heartSize + 12);
+
+    // 5. Draw XP/Score below the life points (using VT323 with spacing)
+    ctx.font = 'bold 26px "VT323", monospace';
+    ctx.letterSpacing = '4px';
+    ctx.fillStyle = '#ffd700'; // Pure gold
+    ctx.fillText(`${scoreValue} XP`, Math.round(vw/2), heartY + heartSize + 36);
+    ctx.restore();
   }
 
   return {

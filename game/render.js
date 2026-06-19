@@ -67,6 +67,7 @@ export function draw(){
   const useTextures = assetsReady();
   helpers.drawPlatforms(camX, camY, useTextures);
   helpers.drawCoins(camX, camY, useTextures);
+  helpers.drawLivres(camX, camY, useTextures);
   helpers.drawEnemies(camX, camY, useTextures);
   helpers.drawProjectiles(camX, camY);
   helpers.drawPlayer(camX, camY, useTextures);
