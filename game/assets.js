@@ -39,7 +39,7 @@ const assetList = [
   {key: 'banner5', src: 'banner5.jpeg'},
   {key: 'banner6', src: 'banner6.jpeg'},
   {key: 'banner7', src: 'banner7.jpeg'},
-  {key: 'banner8', src: 'banner8.jpeg'},
+  {key: 'banner8', src: 'banner8.jpg'},
   {key: 'banner9', src: 'banner9.png'},
   {key: 'banner10', src: 'banner10.png'},
   // UI/projectile/digits/menu/gameover/bosses (local)

@@ -1,0 +1,153 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage{enumitem}
+
+% --- Configuration de la page ---
+\geometry{
+    top=2.5cm,
+    bottom=2.5cm,
+    left=2.5cm,
+    right=2.5cm
+}
+
+% --- Couleurs Personnalisées (Violet, Orange, Noir, Blanc) ---
+\definecolor{techpurple}{RGB}{128, 0, 128} % Violet principal
+\definecolor{techorange}{RGB}{255, 140, 0} % Orange accent
+\definecolor{techdark}{RGB}{30, 30, 30}    % Noir/Gris foncé
+\definecolor{techlight}{RGB}{250, 250, 250}% Blanc/Gris clair
+
+% --- Configuration des liens ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=techpurple,
+    urlcolor=techorange
+}
+
+% --- Configuration des titres ---
+\titleformat{\section}
+  {\color{techpurple}\Large\bfseries\uppercase}
+  {\thesection.}{1em}{}
+\titlespacing*{\section}{0pt}{1.5ex plus 1ex minus .2ex}{1ex plus .2ex}
+
+\titleformat{\subsection}
+  {\color{techorange}\large\bfseries}
+  {\thesubsection.}{1em}{}
+
+% --- En-tête et Pied de page ---
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\color{techpurple}\textbf{Projet : Genius Jump EDU}}
+\lhead{\color{techorange}\textbf{Équipe : Tech Disciples}}
+\cfoot{\color{techdark}\thepage}
+\renewcommand{\headrulewidth}{1pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{techpurple}\leaders\hrule height \headrulewidth\hfill}}
+
+% --- Macro pour les boîtes de membres d'équipe ---
+\newtcolorbox{teambox}[2][]{
+    colback=techlight,
+    colframe=techpurple,
+    coltitle=white,
+    fonttitle=\bfseries,
+    title=#2,
+    boxrule=1pt,
+    arc=4pt,
+    left=5pt,
+    right=5pt,
+    top=5pt,
+    bottom=5pt,
+    #1
+}
+
+% --- Document ---
+\begin{document}
+
+% --- Page de Garde ---
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    % Espace pour le logo
+    \begin{tcolorbox}[colback=white, colframe=techorange, width=0.5\textwidth, arc=8pt, boxrule=2pt, center]
+        \centering
+        \vspace{1.5cm}
+        \textcolor{techdark}{\textit{[Espace Réservé pour le Logo]}}
+        \vspace{1.5cm}
+    \end{tcolorbox}
+    
+    \vspace{2cm}
+    {\Huge \color{techpurple} \textbf{TECH DISCIPLES}} \\[0.5cm]
+    {\LARGE \color{techdark} Présentation du Projet} \\[1.5cm]
+    
+    \begin{tcolorbox}[colback=techpurple, colframe=techpurple, width=0.8\textwidth, center, arc=4pt, boxrule=0pt]
+        \centering
+        {\Huge \color{white} \textbf{Genius Jump EDU}} \\[0.3cm]
+        {\large \color{techorange} \textbf{L'apprentissage immersif et gamifié}}
+    \end{tcolorbox}
+    
+    \vfill
+    {\large \color{techdark} \textbf{Hackathon 2026}}
+    \vspace*{2cm}
+\end{titlepage}
+
+% --- Page 2: Équipe et Projet ---
+\newpage
+
+\section*{L'Équipe : Tech Disciples}
+Notre équipe est composée de passionnés de technologie et d'éducation, unis par la volonté de révolutionner l'apprentissage grâce à l'interactivité et l'intelligence artificielle.
+
+\vspace{0.5cm}
+\begin{tabularx}{\textwidth}{@{}X X X@{}}
+    \begin{teambox}{NSOUNJOU TOUNSIE dUKRAM}
+        \textcolor{techdark}{\textbf{Rôle :}} \\
+        Chef de Groupe \& \\
+        Développeur Backend (N\textsuperscript{o}1) \\
+        \textcolor{techorange}{\small \textit{Architecture, IA \& Base de données}}
+    \end{teambox}
+    &
+    \begin{teambox}{ETOUNdI}
+        \textcolor{techdark}{\textbf{Rôle :}} \\
+        Développeur Frontend (N\textsuperscript{o}2) \\
+        \textcolor{techorange}{\small \textit{Interface, Intégration \& UX/UI}}
+    \end{teambox}
+    &
+    \begin{teambox}{SIEWE MAYLIS}
+        \textcolor{techdark}{\textbf{Rôle :}} \\
+        Asset Artiste \\
+        \textcolor{techorange}{\small \textit{Design Visuel, Sprites \& Animations}}
+    \end{teambox}
+\end{tabularx}
+
+\vspace{1cm}
+
+\section*{Description du Projet}
+
+\subsection*{Le Problème Ciblé}
+Les plateformes d'apprentissage en ligne traditionnelles souffrent souvent d'un manque d'engagement et d'interactivité, conduisant à une baisse de motivation et à un décrochage scolaire, particulièrement chez les jeunes apprenants. L'apprentissage est perçu comme passif et déconnecté des environnements numériques stimulants auxquels les élèves sont habitués.
+
+\subsection*{La Solution Proposée : Genius Jump EDU}
+\textbf{Genius Jump EDU} est une plateforme éducative innovante qui fusionne la gestion de l'apprentissage avec les mécaniques captivantes du jeu vidéo. En essence, nous avons créé \textbf{l'équivalent d'un Moodle, mais transformé en un jeu d'aventure dynamique (mode "gaming")}. 
+
+Les enseignants disposent d'un tableau de bord complet ("La Guilde") pour gérer les classes, analyser les statistiques et créer des "quêtes" (évaluations). Côté élève, l'évaluation se transforme en un jeu de plateforme 2D interactif où répondre aux questions permet de progresser, de vaincre des "boss" et de gagner de l'expérience, rendant l'apprentissage actif et ludique.
+
+\subsection*{Technologies et Intelligence Artificielle Utilisées}
+Le projet s'appuie sur une stack technologique moderne et l'intégration de l'IA pour automatiser la création de contenu :
+
+\begin{itemize}[label=\textcolor{techorange}{\textbullet}, leftmargin=*]
+    \item \textbf{Développement Web \& Jeu :} HTML5 Canvas, JavaScript Vanilla (pour un moteur de jeu léger et performant), CSS3, et Python (Flask) pour le backend robuste.
+    \item \textbf{Prototypage Rapide :} Utilisation de \textbf{Websim} en phase initiale pour générer la base architecturale du jeu de plateforme, accélérant considérablement le développement.
+    \item \textbf{Intelligence Artificielle (IA Magique) :} Intégration de l'\textbf{API Google Gemini}. Les enseignants peuvent uploader leurs supports de cours (PDF, Texte), et l'IA analyse le document pour \textbf{générer automatiquement des questions de quiz pertinentes} (QCM, Vrai/Faux) classées selon la taxonomie de Bloom.
+\end{itemize}
+
+\end{document}
