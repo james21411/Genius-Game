@@ -76,7 +76,8 @@ const assetList = [
   {key: 'ninja_frog_run', img: assets.ninja_frog_run, src: 'Ninja Frog/Run (32x32).png'},
   {key: 'terrain_sheet', img: assets.terrain_sheet, src: 'Terrain/Terrain (16x16).png'},
   {key: 'trampoline_idle', img: assets.trampoline_idle, src: 'Trampoline/Idle.png'},
-  {key: 'trampoline_jump', img: assets.trampoline_jump, src: 'Trampoline/Jump (28x28).png'}
+  {key: 'trampoline_jump', img: assets.trampoline_jump, src: 'Trampoline/Jump (28x28).png'},
+  {key: 'fire_on', img: assets.fire_on, src: 'Fire/On (16x32).png'}
 ];
 
 export function initAssets(){

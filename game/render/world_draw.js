@@ -536,6 +536,10 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
             img = e.grounded ? assets.ninja_frog_run : assets.ninja_frog_idle;
             srcW = 32; srcH = 32;
             frame = Math.floor(performance.now()/(e.grounded?80:150)) % 11;
+          } else if(e.type === 'fire'){
+            img = assets.fire_on;
+            srcW = 16; srcH = 32;
+            frame = Math.floor(performance.now()/150) % 3; // Animated fire
           } else if(e.type && e.type === 'beast' && assets.enemyWalk.length){
             img = assets.enemyWalk[0];
           } else if(e.type && e.type.startsWith('walk') && assets.enemyWalk.length){

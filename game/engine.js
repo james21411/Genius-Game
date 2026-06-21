@@ -332,14 +332,14 @@ function loop(now){
 
     const enemyBox = {x:e.x,y:e.y,w:e.w,h:e.h};
     if(rectsOverlap(pbox, enemyBox) && player.invulnerable <= 0){
-      if(player.vy > 150 && e.type !== 'saw' && e.type !== 'spike_head'){
+      if(player.vy > 150 && e.type !== 'saw' && e.type !== 'spike_head' && e.type !== 'fire'){
         // stomp
         player.vy = -JUMP_V*0.6;
         e.dead = true;
         score += 150;
       } else {
         // enemy contact now costs a life
-        if (e.type === 'saw' || e.type === 'spike_head') {
+        if (e.type === 'saw' || e.type === 'spike_head' || e.type === 'fire') {
             player.lives = Math.max(0, player.lives - 1);
             player.coins = Math.max(0, (player.coins || 0) - 5);
         } else {
@@ -408,7 +408,7 @@ function loop(now){
     if(!proj.hostile && proj.life > 0){
       for(const e of world.enemies){
         if(e.dead) continue;
-        if(e.type === 'saw' || e.type === 'spike_head') continue;
+        if(e.type === 'saw' || e.type === 'spike_head' || e.type === 'fire') continue;
         const eb = {x: e.x, y: e.y, w: e.w, h: e.h};
         const pb = {x: proj.x - proj.r, y: proj.y - proj.r, w: proj.r*2, h: proj.r*2};
         if(rectsOverlap(pb, eb)){

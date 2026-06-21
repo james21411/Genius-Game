@@ -150,14 +150,14 @@ export function makeLevel(){
         }
       }
 
-      // Standalone Obstacle Spawn (Saw / Spike Head)
-      if (Math.random() < 0.15) { // 15% chance per platform
-         const isSaw = Math.random() < 0.5;
+      // Standalone Obstacle Spawn (Saw / Spike Head / Fire)
+      if (Math.random() < 0.20) { // 20% chance per platform
+         const obsType = Math.random();
          const isHorizontal = Math.random() < 0.4;
          const obsX = x + w/2;
-         const obsY = y - 60 - Math.random() * 40;
          
-         if (isSaw) {
+         if (obsType < 0.33) {
+            const obsY = y - 60 - Math.random() * 40;
             world.enemies.push({
                type: 'saw',
                x: obsX - 19,
@@ -171,7 +171,8 @@ export function makeLevel(){
                progress: Math.random() * Math.PI * 2,
                flying: true
             });
-         } else {
+         } else if (obsType < 0.66) {
+            const obsY = y - 60 - Math.random() * 40;
             world.enemies.push({
                type: 'spike_head',
                x: obsX - 27,
@@ -184,6 +185,16 @@ export function makeLevel(){
                speed: 60 + Math.random()*30,
                progress: Math.random() * Math.PI * 2,
                flying: true
+            });
+         } else {
+            world.enemies.push({
+               type: 'fire',
+               x: obsX - 8,
+               y: y - 32, // directly on the platform
+               w: 16, h: 32,
+               flying: false, // sits on the platform
+               dir: 0,
+               speed: 0
             });
          }
       }
