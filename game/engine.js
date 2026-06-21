@@ -230,9 +230,15 @@ function loop(now){
     // movement
     if(e.type === 'saw' || e.type === 'spike_head') {
       e.progress += dt * (e.speed / 50);
-      const dist = e.endY - e.startY;
       const offset = (Math.sin(e.progress) + 1) / 2;
-      e.y = e.startY + offset * dist;
+      
+      const distY = (e.endY || e.startY) - (e.startY || e.y);
+      e.y = (e.startY || e.y) + offset * distY;
+      
+      const distX = (e.endX || e.startX) - (e.startX || e.x);
+      if (distX !== 0) {
+         e.x = (e.startX || e.x) + offset * distX;
+      }
     } else if (e.type === 'ninja_frog') {
       e.timer = (e.timer || 0) + dt;
       if (e.timer > 2.0 && e.grounded !== false) {
@@ -402,6 +408,7 @@ function loop(now){
     if(!proj.hostile && proj.life > 0){
       for(const e of world.enemies){
         if(e.dead) continue;
+        if(e.type === 'saw' || e.type === 'spike_head') continue;
         const eb = {x: e.x, y: e.y, w: e.w, h: e.h};
         const pb = {x: proj.x - proj.r, y: proj.y - proj.r, w: proj.r*2, h: proj.r*2};
         if(rectsOverlap(pb, eb)){

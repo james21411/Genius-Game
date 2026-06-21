@@ -150,6 +150,44 @@ export function makeLevel(){
         }
       }
 
+      // Standalone Obstacle Spawn (Saw / Spike Head)
+      if (Math.random() < 0.15) { // 15% chance per platform
+         const isSaw = Math.random() < 0.5;
+         const isHorizontal = Math.random() < 0.4;
+         const obsX = x + w/2;
+         const obsY = y - 60 - Math.random() * 40;
+         
+         if (isSaw) {
+            world.enemies.push({
+               type: 'saw',
+               x: obsX - 19,
+               y: obsY,
+               w: 38, h: 38,
+               startX: isHorizontal ? obsX - 50 : obsX - 19,
+               endX: isHorizontal ? obsX + 50 : obsX - 19,
+               startY: isHorizontal ? obsY : obsY - 40,
+               endY: isHorizontal ? obsY : obsY + 40,
+               speed: 80 + Math.random()*40,
+               progress: Math.random() * Math.PI * 2,
+               flying: true
+            });
+         } else {
+            world.enemies.push({
+               type: 'spike_head',
+               x: obsX - 27,
+               y: obsY,
+               w: 54, h: 52,
+               startX: isHorizontal ? obsX - 60 : obsX - 27,
+               endX: isHorizontal ? obsX + 60 : obsX - 27,
+               startY: isHorizontal ? obsY : obsY - 50,
+               endY: isHorizontal ? obsY : obsY + 50,
+               speed: 60 + Math.random()*30,
+               progress: Math.random() * Math.PI * 2,
+               flying: true
+            });
+         }
+      }
+
       // Enemy spawn — frequency and type pool driven by difficulty config
       if(Math.random() < (cfg.enemyFrequency || 0.28)){
         const pool = cfg.enemyTypes || ['walk1','fly1'];
