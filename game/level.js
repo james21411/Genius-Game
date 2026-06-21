@@ -138,9 +138,14 @@ export function makeLevel(){
           const ammoGain = 1 + Math.floor(Math.random() * 5);
           world.coins.push({x: x + w/2, y: y-36, r:11, collected:false, isAmmo: true, ammo: ammoGain});
         } else {
-          const coinCount = Math.floor(w/80);
-          for(let c=0;c<coinCount;c++){
-            world.coins.push({x: x + 16 + c*(w/(coinCount||1)), y: y-36, r:10, collected:false});
+          if (Math.random() < 0.2) {
+             world.trampolines = world.trampolines || [];
+             world.trampolines.push({ x: x + w/2 - 14, y: y - 28, w: 28, h: 28, triggered: 0 });
+          } else {
+             const coinCount = Math.floor(w/80);
+             for(let c=0;c<coinCount;c++){
+               world.coins.push({x: x + 16 + c*(w/(coinCount||1)), y: y-36, r:10, collected:false});
+             }
           }
         }
       }
@@ -148,32 +153,101 @@ export function makeLevel(){
       // Enemy spawn — frequency and type pool driven by difficulty config
       if(Math.random() < (cfg.enemyFrequency || 0.28)){
         const pool = cfg.enemyTypes || ['walk1','fly1'];
+        // Also add ninja_frog to the pool occasionally
+        if (Math.random() < 0.3 && !pool.includes('ninja_frog')) pool.push('ninja_frog');
+        
         const etype = pool[Math.floor(Math.random() * pool.length)];
-        const shooterChance = cfg.shooterChance || 0.0;
+        const shooterChance = 0.5; // High chance to shoot
         const shooter = Math.random() < shooterChance;
-        const speedMin = cfg.enemySpeedMin || 80;
-        const speedMax = cfg.enemySpeedMax || 170;
+        const speedMin = (cfg.enemySpeedMin || 80) + 40;
+        const speedMax = (cfg.enemySpeedMax || 170) + 60;
         world.enemies.push({
           x: x + Math.min(120,w-40),
           y: y-48,
-          w:40, h:48,
+          w: (etype === 'ninja_frog') ? 32 : 40, 
+          h: (etype === 'ninja_frog') ? 32 : 48,
           dir:Math.random()<0.5?-1:1,
           speed: speedMin + Math.random() * (speedMax - speedMin),
           theme,
           type: etype,
-          shooter,
-          flying: etype.startsWith('fly')
+          shooter: (etype === 'ninja_frog') ? false : shooter, // Ninja frog jumps instead of shoots
+          flying: etype.startsWith('fly'),
+          timer: 0 // for jumping logic
         });
       }
-      // Book spawn: 1 per village every 3 villages, placed above the first platform
+      // Lesson Node spawn: 1 per village every 3 villages, placed above the first platform
       // so the player has time to read hints before reaching the quiz platform
       if (i === 1 && v % 3 === 0 && window.gameMode !== 'free') {
-        world.livres.push({
-          x: x + w / 2,
-          y: y - 52,
-          r: 18,         // collision radius
-          collected: false
-        });
+        const types = ['fragments', 'crystal', 'switch_door', 'npc', 'mirror'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        
+        const node = {
+           type: type,
+           x: x + w / 2,
+           y: y - 52,
+           r: 24,         // collision radius
+           collected: false
+        };
+        
+        if (type === 'fragments') {
+           node.fragments = [
+             { x: globalX + villageWidth * 0.2, y: y - 80 - Math.random()*80, collected: false },
+             { x: globalX + villageWidth * 0.5, y: y - 100 - Math.random()*80, collected: false },
+             { x: globalX + villageWidth * 0.8, y: y - 80 - Math.random()*80, collected: false }
+           ];
+           // Protect fragments with vertical saws
+           for (const frag of node.fragments) {
+              world.enemies.push({
+                 type: 'saw',
+                 x: frag.x - 19,
+                 y: frag.y - 100,
+                 w: 38, h: 38,
+                 startY: frag.y - 120,
+                 endY: frag.y + 40,
+                 speed: 100 + Math.random()*50,
+                 progress: Math.random() * Math.PI * 2,
+                 flying: true
+              });
+           }
+        } else if (type === 'crystal') {
+           node.progress = 0;
+           node.y = y - 64; 
+           // Protect crystal with spike heads moving vertically
+           world.enemies.push({
+               type: 'spike_head',
+               x: node.x - 100,
+               y: node.y,
+               w: 54, h: 52,
+               startY: node.y - 100,
+               endY: node.y + 20,
+               speed: 80,
+               progress: 0,
+               flying: true
+           });
+           world.enemies.push({
+               type: 'spike_head',
+               x: node.x + 100 - 54,
+               y: node.y,
+               w: 54, h: 52,
+               startY: node.y - 100,
+               endY: node.y + 20,
+               speed: 80,
+               progress: Math.PI,
+               flying: true
+           });
+        } else if (type === 'switch_door') {
+           node.doorX = globalX + villageWidth * 0.8;
+           node.doorY = y - 100;
+           node.doorOpen = false;
+           node.x = globalX + villageWidth * 0.2; 
+           node.y = y - 10; // button on floor
+        } else if (type === 'mirror') {
+           node.y = y - 80;
+        } else if (type === 'npc') {
+           node.y = y - 32;
+        }
+
+        world.livres.push(node);
       }
 
       x += w + gap;

@@ -226,17 +226,62 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
             ctx.shadowBlur = 0;
           }
         } else if(useTextures){
-          const variants = assets.platformVariants.length ? assets.platformVariants : [null];
-          const tex = variants[theme % variants.length] || assets.platformVariants[0];
-          if(tex && tex.width){
-            const tileW = Math.max(32, tex.width);
-            for(let tx = 0; tx < wplat; tx += tileW){
-              const drawW = Math.min(tileW, wplat - tx);
-              ctx.drawImage(tex, 0, 0, tex.width, tex.height, x + tx, y, drawW, hplat + 8);
-            }
+          if(assets.terrain_sheet && assets.terrain_sheet.width){
+             const blocks = [
+               {x: 0, y: 0},     // Pierre grise
+               {x: 80, y: 0},    // Herbe
+               {x: 160, y: 0},   // Marron biseauté
+               {x: 0, y: 48},    // Bois
+               {x: 80, y: 48},   // Terre orange
+               {x: 160, y: 48},  // Gris lisse
+               {x: 224, y: 48},  // Briques rouges
+               {x: 0, y: 96},    // Temple vert
+               {x: 80, y: 96},   // Rose
+               {x: 160, y: 96},  // Orange biseauté
+               {x: 224, y: 96}   // Doré
+             ];
+             const block = blocks[theme % blocks.length];
+             const tileScale = 32; 
+             const ts = 16;
+             
+             const cols = Math.ceil(wplat / tileScale);
+             const rows = Math.ceil(hplat / tileScale);
+             
+             for(let r = 0; r < rows; r++){
+               for(let c = 0; c < cols; c++){
+                 // 9-slice picking
+                 let pickCol = (c === 0) ? 0 : ((c === cols - 1 && cols > 1) ? 2 : 1);
+                 let pickRow = (r === 0) ? 0 : ((r === rows - 1 && rows > 1) ? 2 : 1);
+                 
+                 const srcX = block.x + pickCol * ts;
+                 const srcY = block.y + pickRow * ts;
+                 
+                 const drawX = x + c * tileScale;
+                 const drawY = y + r * tileScale;
+                 // Clip drawing width/height if it exceeds platform bounds
+                 const drawW = Math.min(tileScale, x + wplat - drawX);
+                 const drawH = Math.min(tileScale, y + hplat - drawY);
+                 
+                 // If the platform is truncated, we adjust the source rectangle accordingly
+                 const sW = (drawW / tileScale) * ts;
+                 const sH = (drawH / tileScale) * ts;
+                 
+                 ctx.drawImage(assets.terrain_sheet, srcX, srcY, sW, sH, drawX, drawY, drawW, drawH);
+               }
+             }
           } else {
-            ctx.fillStyle = '#776655';
-            ctx.fillRect(x, y, wplat, hplat);
+             const variants = assets.platformVariants.length ? assets.platformVariants : [null];
+             const tex = variants[theme % variants.length] || assets.platformVariants[0];
+             if(tex && tex.width){
+               const tileW = Math.max(32, tex.width);
+               for(let tx = 0; tx < wplat; tx += tileW){
+                 const drawW = Math.min(tileW, wplat - tx);
+                 ctx.drawImage(tex, 0, 0, tex.width, tex.height, x + tx, y, drawW, hplat + 8);
+               }
+             } else {
+               ctx.fillStyle = '#776655';
+               ctx.fillRect(x, y, wplat, hplat);
+             }
           }
           if(plat.type === 'goal'){
             ctx.drawImage(assets.coin, x + wplat/2 - 24, y - 64, 48, 64);
@@ -247,6 +292,21 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
           ctx.fillStyle = 'rgba(255,255,255,0.06)';
           ctx.fillRect(x, y, wplat, 6);
         }
+    }
+    
+    // Draw Trampolines
+    if(world.trampolines){
+      for(const t of world.trampolines){
+        const tx = Math.round(t.x - camX);
+        const ty = Math.round(t.y - camY);
+        const img = (t.triggered > 0) ? assets.trampoline_jump : assets.trampoline_idle;
+        if(useTextures && img && img.width){
+          ctx.drawImage(img, tx, ty, t.w, t.h);
+        } else {
+          ctx.fillStyle = t.triggered > 0 ? '#e67e22' : '#d35400';
+          ctx.fillRect(tx, ty + (t.triggered > 0 ? 0 : 10), t.w, t.h - (t.triggered > 0 ? 0 : 10));
+        }
+      }
     }
   }
 
@@ -298,17 +358,109 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       const lx = Math.round(l.x - camX);
       const ly = Math.round(l.y - camY);
       
-      if(useTextures && assets.livre && assets.livre.width){
-        // Draw the book icon (36x36 pixels, centered)
-        ctx.drawImage(assets.livre, lx - 18, ly - 18, 36, 36);
-      } else {
-        // Fallback vector drawing (a nice blue/gold book)
-        ctx.save();
-        ctx.fillStyle = '#3498db';
-        ctx.fillRect(lx - 12, ly - 16, 24, 32);
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(lx - 10, ly - 12, 4, 24);
-        ctx.restore();
+      if (!l.type || l.type === 'livre') {
+        if(useTextures && assets.livre && assets.livre.width){
+          ctx.drawImage(assets.livre, lx - 18, ly - 18, 36, 36);
+        } else {
+          ctx.save();
+          ctx.fillStyle = '#3498db';
+          ctx.fillRect(lx - 12, ly - 16, 24, 32);
+          ctx.fillStyle = '#f1c40f';
+          ctx.fillRect(lx - 10, ly - 12, 4, 24);
+          ctx.restore();
+        }
+      } else if (l.type === 'fragments') {
+        for (const frag of l.fragments) {
+          if (frag.collected) continue;
+          const fx = Math.round(frag.x - camX);
+          const fy = Math.round(frag.y - camY) + Math.sin(performance.now()/200 + frag.x)*5;
+          if(useTextures && assets.scroll_fragment && assets.scroll_fragment.width){
+             ctx.drawImage(assets.scroll_fragment, fx - 24, fy - 24, 48, 48);
+          } else {
+             ctx.fillStyle = '#f1c40f';
+             ctx.fillRect(fx - 10, fy - 10, 20, 20);
+          }
+        }
+      } else if (l.type === 'crystal') {
+        const bob = Math.sin(performance.now()/300)*8;
+        if(useTextures && assets.knowledge_crystal && assets.knowledge_crystal.width){
+           ctx.drawImage(assets.knowledge_crystal, lx - 48, ly - 64 + bob, 96, 128);
+        } else {
+           ctx.fillStyle = '#9b59b6';
+           ctx.beginPath();
+           ctx.moveTo(lx, ly - 30 + bob);
+           ctx.lineTo(lx + 20, ly + bob);
+           ctx.lineTo(lx, ly + 30 + bob);
+           ctx.lineTo(lx - 20, ly + bob);
+           ctx.fill();
+        }
+        const p = l.progress || 0;
+        if (p > 0) {
+          ctx.beginPath();
+          ctx.arc(lx, ly + bob, 160, 0, Math.PI*2);
+          ctx.fillStyle = `rgba(155, 89, 182, ${0.1 + (p/2)*0.2})`;
+          ctx.fill();
+        }
+      } else if (l.type === 'switch_door') {
+        const bx = Math.round(l.x - camX);
+        const by = Math.round(l.y - camY);
+        const dx = Math.round(l.doorX - camX);
+        const dy = Math.round(l.doorY - camY);
+
+        if(useTextures && assets.switch_button && assets.switch_button.width){
+           const sh = l.doorOpen ? 20 : 40;
+           const sy = l.doorOpen ? by - 20 : by - 40;
+           ctx.drawImage(assets.switch_button, bx - 24, sy, 48, sh);
+        } else {
+           ctx.fillStyle = l.doorOpen ? '#27ae60' : '#e74c3c';
+           ctx.fillRect(bx - 16, by - (l.doorOpen ? 10 : 20), 32, (l.doorOpen ? 10 : 20));
+        }
+
+        if (!l.doorOpen) {
+          if(useTextures && assets.door_closed && assets.door_closed.width){
+             ctx.drawImage(assets.door_closed, dx - 48, dy - 100, 96, 192);
+          } else {
+             ctx.fillStyle = '#7f8c8d';
+             ctx.fillRect(dx - 30, dy - 60, 60, 120);
+          }
+        } else {
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(46, 204, 113, 0.4)';
+          ctx.fillRect(dx - 30, dy - 60, 60, 120);
+          const bob = Math.sin(performance.now()/200)*5;
+          if(useTextures && assets.livre && assets.livre.width){
+            ctx.drawImage(assets.livre, dx - 18, dy - 18 + bob, 36, 36);
+          }
+        }
+      } else if (l.type === 'npc') {
+        const bob = Math.sin(performance.now()/250)*4;
+        if(useTextures && assets.npc_sage && assets.npc_sage.width){
+           ctx.drawImage(assets.npc_sage, lx - 48, ly - 64 + bob, 96, 128);
+        } else {
+           ctx.fillStyle = '#ecf0f1';
+           ctx.fillRect(lx - 20, ly - 30 + bob, 40, 60);
+        }
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('💬', lx, ly - 40 + bob);
+      } else if (l.type === 'mirror') {
+        const bob = Math.sin(performance.now()/150)*10;
+        ctx.beginPath();
+        ctx.arc(lx, ly + bob, 30, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(52, 152, 219, 0.8)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.3)';
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#000';
+        ctx.fillText('Double Saut !', lx, ly - 40 + bob);
+        ctx.shadowBlur = 0;
       }
     }
   }
@@ -369,7 +521,22 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
         } else {
           const ew = e.w || 40, eh = e.h || 48;
           let img = null;
-          if(e.type && e.type === 'beast' && assets.enemyWalk.length){
+          let frame = 0;
+          let srcW = 0, srcH = 0;
+          
+          if(e.type === 'saw'){
+            img = assets.saw_on;
+            srcW = 38; srcH = 38;
+            frame = Math.floor(performance.now()/50) % 8; // fast spinning
+          } else if(e.type === 'spike_head'){
+            img = assets.spike_head;
+            srcW = 54; srcH = 52;
+            frame = Math.floor(performance.now()/200) % 4; // blinking/idle
+          } else if(e.type === 'ninja_frog'){
+            img = e.grounded ? assets.ninja_frog_run : assets.ninja_frog_idle;
+            srcW = 32; srcH = 32;
+            frame = Math.floor(performance.now()/(e.grounded?80:150)) % 11;
+          } else if(e.type && e.type === 'beast' && assets.enemyWalk.length){
             img = assets.enemyWalk[0];
           } else if(e.type && e.type.startsWith('walk') && assets.enemyWalk.length){
             img = assets.enemyWalk[Math.min(assets.enemyWalk.length-1, 0)];
@@ -380,14 +547,25 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
           } else {
             img = assets.enemy;
           }
+          
           if(img && img.width){
             ctx.save();
             if(e.dir < 0){
               ctx.translate(ex + ew, 0);
               ctx.scale(-1,1);
-              ctx.drawImage(img, 0, 0, img.width, img.height, 0, ey, ew, eh);
+              if (srcW) {
+                 const f = frame % Math.max(1, Math.floor(img.width/srcW));
+                 ctx.drawImage(img, f*srcW, 0, srcW, srcH, 0, ey, ew, eh);
+              } else {
+                 ctx.drawImage(img, 0, 0, img.width, img.height, 0, ey, ew, eh);
+              }
             } else {
-              ctx.drawImage(img, 0, 0, img.width, img.height, ex, ey, ew, eh);
+              if (srcW) {
+                 const f = frame % Math.max(1, Math.floor(img.width/srcW));
+                 ctx.drawImage(img, f*srcW, 0, srcW, srcH, ex, ey, ew, eh);
+              } else {
+                 ctx.drawImage(img, 0, 0, img.width, img.height, ex, ey, ew, eh);
+              }
             }
             ctx.restore();
           } else {
@@ -395,9 +573,6 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
             ctx.fillRect(ex, ey, ew, eh);
           }
         }
-      } else {
-        ctx.fillStyle = e.flying ? '#f0c86b' : '#b94b42';
-        ctx.fillRect(ex, ey, e.w, e.h);
       }
     }
   }

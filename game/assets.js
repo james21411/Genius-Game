@@ -14,7 +14,19 @@ export const assets = {
   projectilePlayer: new Image(),
   digits: new Image(),
   bosses: [],
-  livre: new Image()
+  livre: new Image(),
+  scroll_fragment: new Image(),
+  knowledge_crystal: new Image(),
+  switch_button: new Image(),
+  door_closed: new Image(),
+  npc_sage: new Image(),
+  saw_on: new Image(),
+  spike_head: new Image(),
+  ninja_frog_idle: new Image(),
+  ninja_frog_run: new Image(),
+  terrain_sheet: new Image(),
+  trampoline_idle: new Image(),
+  trampoline_jump: new Image()
 };
 
 let assetsLoaded = 0;
@@ -52,7 +64,19 @@ const assetList = [
   {key: 'boss3', src: 'boss3.png'},
   {key: 'boss4', src: 'boss4.png'},
   {key: 'boss5', src: 'boss5.png'},
-  {key: 'livre', img: assets.livre, src: 'livre1.jpeg'}
+  {key: 'livre', img: assets.livre, src: 'livre1.jpeg'},
+  {key: 'scroll_fragment', img: assets.scroll_fragment, src: 'scroll_fragment.png'},
+  {key: 'knowledge_crystal', img: assets.knowledge_crystal, src: 'knowledge_crystal.png'},
+  {key: 'switch_button', img: assets.switch_button, src: 'switch_button.png'},
+  {key: 'door_closed', img: assets.door_closed, src: 'door_closed.png'},
+  {key: 'npc_sage', img: assets.npc_sage, src: 'npc_sage.png'},
+  {key: 'saw_on', img: assets.saw_on, src: 'Saw/On (38x38).png'},
+  {key: 'spike_head', img: assets.spike_head, src: 'Spike Head/Blink (54x52).png'},
+  {key: 'ninja_frog_idle', img: assets.ninja_frog_idle, src: 'Ninja Frog/Idle (32x32).png'},
+  {key: 'ninja_frog_run', img: assets.ninja_frog_run, src: 'Ninja Frog/Run (32x32).png'},
+  {key: 'terrain_sheet', img: assets.terrain_sheet, src: 'Terrain/Terrain (16x16).png'},
+  {key: 'trampoline_idle', img: assets.trampoline_idle, src: 'Trampoline/Idle.png'},
+  {key: 'trampoline_jump', img: assets.trampoline_jump, src: 'Trampoline/Jump (28x28).png'}
 ];
 
 export function initAssets(){

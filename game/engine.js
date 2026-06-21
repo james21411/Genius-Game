@@ -213,10 +213,52 @@ function loop(now){
     player._jumpCount = 0;
   }
 
+  if (world.trampolines) {
+    for(const t of world.trampolines){
+       if(t.triggered > 0) t.triggered -= dt;
+       if(player.vy >= 0 && rectsOverlap(pbox, {x: t.x, y: t.y, w: t.w, h: t.h})) {
+           player.vy = -JUMP_V * 1.5; // huge bounce
+           player.grounded = false;
+           t.triggered = 0.5;
+           playCollect(); // bounce sound
+       }
+    }
+  }
+
   // enemies - movement, shooting, collision (stomp) and simple bounce; enemies can spawn projectiles
   for(const e of world.enemies){
     // movement
-    if(e.flying){
+    if(e.type === 'saw' || e.type === 'spike_head') {
+      e.progress += dt * (e.speed / 50);
+      const dist = e.endY - e.startY;
+      const offset = (Math.sin(e.progress) + 1) / 2;
+      e.y = e.startY + offset * dist;
+    } else if (e.type === 'ninja_frog') {
+      e.timer = (e.timer || 0) + dt;
+      if (e.timer > 2.0 && e.grounded !== false) {
+         e.vy = -JUMP_V * 0.8;
+         e.timer = 0;
+         e.grounded = false;
+      }
+      e.vy = (e.vy || 0) + GRAVITY * dt;
+      e.y += e.vy * dt;
+      e.x += e.dir * e.speed * dt;
+      let grounded = false;
+      for (const p of world.platforms) {
+          if (e.vy > 0 && e.y + e.h <= p.y + 10 && e.y + e.h + e.vy*dt >= p.y && e.x + e.w > p.x && e.x < p.x + p.w) {
+              e.y = p.y - e.h;
+              e.vy = 0;
+              grounded = true;
+          }
+      }
+      e.grounded = grounded;
+      if(!grounded || e.x < 0 || e.x + e.w > world.width) {
+        if (e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
+      } else {
+        const under = world.platforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
+        if (!under) e.dir *= -1;
+      }
+    } else if(e.flying){
       e.x += e.dir * e.speed * dt;
       if(e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
     } else {
@@ -284,14 +326,19 @@ function loop(now){
 
     const enemyBox = {x:e.x,y:e.y,w:e.w,h:e.h};
     if(rectsOverlap(pbox, enemyBox) && player.invulnerable <= 0){
-      if(player.vy > 150){
+      if(player.vy > 150 && e.type !== 'saw' && e.type !== 'spike_head'){
         // stomp
         player.vy = -JUMP_V*0.6;
         e.dead = true;
         score += 150;
       } else {
         // enemy contact now costs a life
-        player.lives = Math.max(0, player.lives - 1);
+        if (e.type === 'saw' || e.type === 'spike_head') {
+            player.lives = Math.max(0, player.lives - 1);
+            player.coins = Math.max(0, (player.coins || 0) - 5);
+        } else {
+            player.lives = Math.max(0, player.lives - 1);
+        }
         player.invulnerable = 1.2;
         player.vy = -JUMP_V*0.4;
         player.x += (e.dir > 0 ? -48 : 48);
@@ -450,17 +497,66 @@ function loop(now){
     }
   }
 
-  // book (livre) pickups — open hint/explanation dialog
+  // Lesson nodes (livres) updates and collisions
   if (world.livres) {
     for (const livre of world.livres) {
-      if (!livre.collected && rectsOverlap(
-        {x: livre.x - livre.r, y: livre.y - livre.r, w: livre.r*2, h: livre.r*2}, pbox
-      )) {
+      if (livre.collected) continue;
+      
+      let unlock = false;
+
+      if (!livre.type || livre.type === 'livre') {
+        if (rectsOverlap({x: livre.x - livre.r, y: livre.y - livre.r, w: livre.r*2, h: livre.r*2}, pbox)) {
+          unlock = true;
+        }
+      } else if (livre.type === 'fragments') {
+        let allCollected = true;
+        for (const frag of livre.fragments) {
+          if (!frag.collected) {
+             if (rectsOverlap({x: frag.x - 16, y: frag.y - 16, w: 32, h: 32}, pbox)) {
+               frag.collected = true;
+               floatingAmmoTexts.push({x: frag.x, y: frag.y - 20, t: 1.0, text: '🧩 Fragment !'});
+               playCollect();
+             } else {
+               allCollected = false;
+             }
+          }
+        }
+        if (allCollected) unlock = true;
+      } else if (livre.type === 'crystal') {
+        const dist = Math.hypot(player.x + player.w/2 - livre.x, player.y + player.h/2 - livre.y);
+        if (dist < 160) {
+          livre.progress = (livre.progress || 0) + dt;
+          if (livre.progress >= 2.0) {
+            unlock = true;
+          }
+        } else {
+          livre.progress = Math.max(0, (livre.progress || 0) - dt * 0.5);
+        }
+      } else if (livre.type === 'switch_door') {
+        if (!livre.doorOpen && rectsOverlap({x: livre.x - 24, y: livre.y - 20, w: 48, h: 40}, pbox)) {
+           livre.doorOpen = true;
+           floatingAmmoTexts.push({x: livre.x, y: livre.y - 20, t: 1.0, text: '🚪 Ouvert !'});
+           playCollect();
+        }
+        if (livre.doorOpen && rectsOverlap({x: livre.doorX - 48, y: livre.doorY - 96, w: 96, h: 192}, pbox)) {
+           unlock = true;
+        }
+      } else if (livre.type === 'npc') {
+        if (rectsOverlap({x: livre.x - 48, y: livre.y - 64, w: 96, h: 128}, pbox)) {
+           unlock = true;
+        }
+      } else if (livre.type === 'mirror') {
+        const dist = Math.hypot(player.x + player.w/2 - livre.x, player.y + player.h/2 - livre.y);
+        if (dist < 180 && player._jumpCount >= 2) {
+           unlock = true;
+        }
+      }
+
+      if (unlock) {
         livre.collected = true;
-        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.4, text: '📖 INDICE !'});
-        // Fire event to open the hint dialog
+        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.4, text: '📖 SAVOIR DÉBLOQUÉ !'});
         window.dispatchEvent(new CustomEvent('livre-collected', {
-          detail: { x: livre.x, y: livre.y }
+          detail: { x: player.x, y: player.y }
         }));
       }
     }
