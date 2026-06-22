@@ -32,8 +32,13 @@ export const assets = {
 let assetsLoaded = 0;
 
  // concise local-only asset list (no external downloads)
+const savedCharacter = localStorage.getItem('selectedCharacter') || 'duthant';
+let playerSpriteSrc = 'mon_sp_clean.png';
+if (savedCharacter === 'etoundi') playerSpriteSrc = 'etoundi_clean.png';
+if (savedCharacter === 'maylis') playerSpriteSrc = 'maylis_clean.png';
+
 const assetList = [
-  {key: 'player', img: assets.player, src: 'mon_sp_clean.png'},
+  {key: 'player', img: assets.player, src: playerSpriteSrc},
   {key: 'coin', img: assets.coin, src: 'coin.png'},
   {key: 'enemy', img: assets.enemy, src: 'enemy.png'},
   // walking / flying enemies

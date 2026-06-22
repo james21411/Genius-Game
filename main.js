@@ -157,6 +157,47 @@ if (nextLvlBtn) nextLvlBtn.addEventListener('click', () => {
   if (selectedWorldIndex < availableWorlds.length - 1) { selectedWorldIndex++; updateLevelDisplay(); }
 });
 
+// Character selector logic
+const characters = [
+  { id: 'duthant', src: 'mon_sp_clean.png' },
+  { id: 'etoundi', src: 'etoundi_clean.png' },
+  { id: 'maylis', src: 'maylis_clean.png' }
+];
+let currentCharIndex = characters.findIndex(c => c.id === (localStorage.getItem('selectedCharacter') || 'duthant'));
+if (currentCharIndex === -1) currentCharIndex = 0;
+
+const menuPlayerSprite = document.getElementById('menu-player-sprite');
+const characterNameEl = document.getElementById('character-name');
+const prevCharBtn = document.getElementById('prev-char');
+const nextCharBtn = document.getElementById('next-char');
+
+function updateCharacterDisplay() {
+  const char = characters[currentCharIndex];
+  if (menuPlayerSprite) {
+    menuPlayerSprite.style.backgroundImage = `url('${char.src}')`;
+  }
+  if (characterNameEl) {
+    characterNameEl.textContent = char.id;
+  }
+  localStorage.setItem('selectedCharacter', char.id);
+  // Also update the active game asset dynamically so if they press Play, the correct character loads without refreshing
+  if (assets.player) {
+    assets.player.src = char.src;
+  }
+}
+
+if (prevCharBtn) prevCharBtn.addEventListener('click', () => {
+  currentCharIndex = (currentCharIndex - 1 + characters.length) % characters.length;
+  updateCharacterDisplay();
+});
+if (nextCharBtn) nextCharBtn.addEventListener('click', () => {
+  currentCharIndex = (currentCharIndex + 1) % characters.length;
+  updateCharacterDisplay();
+});
+
+// Initialize display
+updateCharacterDisplay();
+
 function updateMenuVisibility(){
   const studentLogin = document.querySelector('.student-login');
   const xpDisplay = document.getElementById('menu-xp-display');

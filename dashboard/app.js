@@ -8,10 +8,19 @@ let currentClassId = null;
 const authOverlay = document.getElementById('auth-overlay');
 const gameApp = document.getElementById('game-app');
 const classSelect = document.getElementById('class-select');
+const characterSelect = document.getElementById('character-select');
 const teacherNameSpan = document.getElementById('teacher-name');
 const navClassCode = document.getElementById('nav-class-code');
 
 // --- Initialization ---
+const savedCharacter = localStorage.getItem('selectedCharacter') || 'duthant';
+if (characterSelect) {
+    characterSelect.value = savedCharacter;
+    characterSelect.addEventListener('change', (e) => {
+        localStorage.setItem('selectedCharacter', e.target.value);
+    });
+}
+
 if (currentTeacherId) {
     showApp();
 } else {

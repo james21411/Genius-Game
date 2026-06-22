@@ -65,8 +65,13 @@
               </div>
             </div>
           </div>
-          <div class="player-preview">
-            <div class="menu-player-sprite"></div>
+          <div class="player-preview" style="display:flex; align-items:center; justify-content:center; gap: 10px;">
+            <button id="prev-char" class="level-arrow" aria-label="Personnage précédent">&#9664;</button>
+            <div style="display:flex; flex-direction:column; align-items:center;">
+              <div id="character-name" style="font-family:'Press Start 2P', monospace; font-size:12px; color:#ffd160; margin-bottom:5px; text-transform:uppercase; text-shadow: 2px 2px 0 #000;">DUTHANT</div>
+              <div id="menu-player-sprite" class="menu-player-sprite"></div>
+            </div>
+            <button id="next-char" class="level-arrow" aria-label="Personnage suivant">&#9654;</button>
           </div>
         </div>
 
