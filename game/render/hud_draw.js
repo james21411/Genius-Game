@@ -143,7 +143,11 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
       ctx.letterSpacing = '2px';
       for(const ft of window.floatingAmmoTexts || []){
         const alpha = Math.max(0, Math.min(1, ft.t));
-        ctx.fillStyle = `rgba(255, 230, 100, ${alpha})`;
+        if (ft.text.startsWith('-')) {
+            ctx.fillStyle = `rgba(255, 80, 80, ${alpha})`;
+        } else {
+            ctx.fillStyle = `rgba(255, 230, 100, ${alpha})`;
+        }
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
         ctx.shadowBlur = 4;
         ctx.fillText(ft.text, Math.round(ft.x - camX), Math.round(ft.y - camY - (1-ft.t)*30));

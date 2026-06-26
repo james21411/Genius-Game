@@ -67,76 +67,74 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
         ctx.restore();
       }
     } else if(window.gameState === 'gameover'){
-      if(assets.gameover && assets.gameover.width){
-        const targetW = Math.min(vw * 0.9, assets.gameover.width);
-        const targetH = Math.min(vh * 0.7, assets.gameover.height * (targetW / assets.gameover.width));
-        const dx = Math.round((vw - targetW)/2);
-        const dy = Math.round((vh - targetH)/2 - 20);
-        ctx.globalAlpha = 0.98;
-        ctx.drawImage(assets.gameover, 0,0,assets.gameover.width, assets.gameover.height, dx, dy, targetW, targetH);
-        ctx.globalAlpha = 1;
+      // Full-screen dark backdrop
+      ctx.fillStyle = 'rgba(10, 0, 0, 0.88)';
+      ctx.fillRect(0, 0, vw, vh);
 
-        // overlay clear restart hint
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(dx + 20, dy + targetH - 96, targetW - 40, 64);
-        ctx.fillStyle = '#ffd6d6';
-        ctx.font = `${Math.max(18, Math.floor(targetH*0.05))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('GAME OVER - CLIQUEZ POUR RECOMMENCER', dx + targetW/2, dy + targetH - 64 + 32);
-        ctx.restore();
-      } else {
-        // dark backdrop
-        ctx.fillStyle = 'rgba(0,0,0,0.9)';
-        ctx.fillRect(0,0,vw,vh);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const cx = Math.round(vw / 2);
+      const cy = Math.round(vh / 2);
 
-        // high-contrast, textured-like numeric rendering for score if digits texture available
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+      // Animated red pulse behind the title
+      const pulse = 0.75 + Math.sin(performance.now() / 300) * 0.25;
+      ctx.beginPath();
+      ctx.arc(cx, cy - 60, 180 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180, 0, 0, ${0.12 * pulse})`;
+      ctx.fill();
 
-        // big GAME OVER title
-        ctx.font = '48px monospace';
-        ctx.lineWidth = 8;
-        ctx.strokeStyle = 'rgba(0,0,0,0.95)';
-        ctx.strokeText('GAME OVER', Math.round(vw/2), Math.round(vh/2) - 40);
-        ctx.fillStyle = '#ffb3b3';
-        ctx.fillText('GAME OVER', Math.round(vw/2), Math.round(vh/2) - 40);
+      // "GAME OVER" — giant, red, centered
+      const titleSize = Math.max(52, Math.floor(vw / 10));
+      ctx.font = `bold ${titleSize}px 'Press Start 2P', monospace`;
+      // Black stroke for depth
+      ctx.lineWidth = titleSize * 0.18;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+      ctx.strokeText('GAME OVER', cx, cy - 60);
+      // Red gradient fill
+      const grad = ctx.createLinearGradient(cx - 300, cy - 120, cx + 300, cy);
+      grad.addColorStop(0, '#ff2222');
+      grad.addColorStop(0.5, '#ff6060');
+      grad.addColorStop(1, '#cc0000');
+      ctx.fillStyle = grad;
+      ctx.fillText('GAME OVER', cx, cy - 60);
 
-        // attempt to draw numeric score using digits texture if present
-        const scoreValue = Math.max(0, typeof window.__scoreForRender === 'number' ? window.__scoreForRender : 0);
-        function drawNumberString(str, tx, ty, targetH = 40, spacing = 6){
-          if(!(assets.digits && assets.digits.width && assets.digits.height)) return false;
-          const srcDigitW = Math.floor(assets.digits.width / 10);
-          const srcDigitH = assets.digits.height;
-          const targetW = Math.floor(targetH * (srcDigitW / srcDigitH));
-          let dx = tx - (str.length * (targetW + spacing))/2;
-          for(const ch of str){
-            const n = Math.max(0, Math.min(9, parseInt(ch) || 0));
-            ctx.drawImage(assets.digits, n*srcDigitW, 0, srcDigitW, srcDigitH, dx, ty - targetH/2, targetW, targetH);
-            dx += targetW + spacing;
-          }
-          return true;
-        }
+      // Red glow
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = 'rgba(255, 80, 80, 0.35)';
+      ctx.fillText('GAME OVER', cx, cy - 60);
+      ctx.shadowBlur = 0;
 
-        const didDraw = drawNumberString(String(scoreValue), Math.round(vw/2), Math.round(vh/2) + 30, 48, 8);
-        if(!didDraw){
-          // fallback text
-          ctx.font = '22px monospace';
-          ctx.fillStyle = '#ffdede';
-          ctx.fillText('Score: ' + String(scoreValue), Math.round(vw/2), Math.round(vh/2) + 30);
-        }
+      // Score display
+      const scoreValue = Math.max(0, typeof window.__scoreForRender === 'number' ? window.__scoreForRender : 0);
+      ctx.font = `bold 28px 'VT323', monospace`;
+      ctx.fillStyle = '#ffd700';
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 4;
+      ctx.strokeText(`Score final : ${scoreValue} XP`, cx, cy + 30);
+      ctx.fillText(`Score final : ${scoreValue} XP`, cx, cy + 30);
 
-        // restart hint
-        ctx.font = '18px monospace';
-        ctx.lineWidth = 4;
+      // Separator line
+      ctx.strokeStyle = 'rgba(255, 60, 60, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 220, cy + 60);
+      ctx.lineTo(cx + 220, cy + 60);
+      ctx.stroke();
+
+      // Restart hint (blinking)
+      const blink = Math.floor(performance.now() / 600) % 2 === 0;
+      if (blink) {
+        ctx.font = `bold 18px 'Press Start 2P', monospace`;
+        ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-        ctx.strokeText('Cliquez pour recommencer', Math.round(vw/2), Math.round(vh/2) + 86);
-        ctx.fillStyle = '#f0f7d8';
-        ctx.fillText('Cliquez pour recommencer', Math.round(vw/2), Math.round(vh/2) + 86);
-        ctx.restore();
+        ctx.lineWidth = 3;
+        ctx.strokeText('CLIQUEZ POUR RECOMMENCER', cx, cy + 100);
+        ctx.fillText('CLIQUEZ POUR RECOMMENCER', cx, cy + 100);
       }
+
+      ctx.restore();
     }
   }
 

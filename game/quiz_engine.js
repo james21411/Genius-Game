@@ -247,6 +247,42 @@ function _initOverlayButtons() {
   _overlayReady = true;
 }
 
+function _getImageBackgroundHtml(imageName) {
+  if (imageName === 'carte_france') {
+    return `
+      <svg viewBox="0 0 200 200" style="width: 100%; height: 100%; background: #2c3e50; border-radius: 8px;">
+        <polygon points="100,20 140,40 160,80 150,130 110,180 70,170 40,120 50,70 80,30" fill="#34495e" stroke="#7f8c8d" stroke-width="2"/>
+        <text x="100" y="100" fill="rgba(255,255,255,0.15)" font-size="12" text-anchor="middle" font-weight="bold">CARTE DE FRANCE</text>
+      </svg>
+    `;
+  } else if (imageName === 'squelette') {
+    return `
+      <svg viewBox="0 0 200 200" style="width: 100%; height: 100%; background: #2c3e50; border-radius: 8px;">
+        <circle cx="100" cy="40" r="15" fill="none" stroke="#fff" stroke-width="3"/>
+        <line x1="100" y1="55" x2="100" y2="120" stroke="#fff" stroke-width="4"/>
+        <line x1="100" y1="70" x2="70" y2="100" stroke="#fff" stroke-width="3"/>
+        <line x1="100" y1="70" x2="130" y2="100" stroke="#fff" stroke-width="3"/>
+        <line x1="100" y1="120" x2="80" y2="170" stroke="#fff" stroke-width="3"/>
+        <line x1="100" y1="120" x2="120" y2="170" stroke="#fff" stroke-width="3"/>
+        <text x="100" y="100" fill="rgba(255,255,255,0.15)" font-size="12" text-anchor="middle" font-weight="bold">SQUELETTE HUMAIN</text>
+      </svg>
+    `;
+  } else if (imageName === 'systeme_solaire') {
+    return `
+      <svg viewBox="0 0 200 200" style="width: 100%; height: 100%; background: #2c3e50; border-radius: 8px;">
+        <circle cx="100" cy="100" r="25" fill="#f1c40f"/>
+        <circle cx="100" cy="100" r="50" fill="none" stroke="#7f8c8d" stroke-dasharray="2,2"/>
+        <circle cx="100" cy="100" r="80" fill="none" stroke="#7f8c8d" stroke-dasharray="2,2"/>
+        <circle cx="150" cy="100" r="6" fill="#e67e22"/>
+        <circle cx="60" cy="40" r="8" fill="#3498db"/>
+        <text x="100" y="145" fill="rgba(255,255,255,0.15)" font-size="12" text-anchor="middle" font-weight="bold">SYSTÈME SOLAIRE</text>
+      </svg>
+    `;
+  } else {
+    return `<img src="${imageName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;" onerror="this.src='./Uo17V.jpg';"/>`;
+  }
+}
+
 function _syncOverlay() {
   const overlay = document.getElementById('quizOverlay');
   const controls = document.getElementById('controls');
@@ -272,6 +308,11 @@ function _syncOverlay() {
   const answersContainer = document.getElementById('quizAnswers');
   
   const type = _question.type || 'qcm';
+
+  let extra = {};
+  if (_question.extra_data) {
+    try { extra = JSON.parse(_question.extra_data); } catch(e) {}
+  }
   
   if (type === 'qcm') {
     qText.textContent = _question.question;
@@ -314,28 +355,59 @@ function _syncOverlay() {
       });
     });
   }
+  else if (type === 'short_answer') {
+    qText.textContent = _question.question;
+    answersContainer.className = "quiz-answers short-answer-layout";
+    answersContainer.style.display = "block";
+    answersContainer.innerHTML = `
+      <div style="margin-bottom: 12px;">
+        <input type="text" id="shortAnswerInput" placeholder="Écris ta réponse ici..." style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #555; background: #1a2238; color: #fff; border-radius: 8px; outline: none; text-align: center;">
+      </div>
+      <button type="button" id="shortAnswerValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;" disabled>VALIDER LA RÉPONSE</button>
+    `;
+    
+    const inputField = answersContainer.querySelector('#shortAnswerInput');
+    const validateBtn = answersContainer.querySelector('#shortAnswerValidateBtn');
+    
+    setTimeout(() => inputField.focus(), 50);
+    inputField.addEventListener('input', () => {
+      validateBtn.disabled = !inputField.value.trim();
+    });
+    
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (_state === 'active') submitAnswer(inputField.value.trim());
+    });
+
+    inputField.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (inputField.value.trim() && _state === 'active') {
+          submitAnswer(inputField.value.trim());
+        }
+      }
+    });
+  }
   else if (type === 'matching') {
     qText.textContent = _question.question || "Associe les correspondances :";
     
-    const leftItems = _question.left_items || [];
-    const rightItems = _question.right_items || [];
+    const leftItems = extra.left_items || _question.left_items || [];
+    const rightItems = extra.right_items || _question.right_items || [];
 
     answersContainer.className = "quiz-answers matching-layout";
     answersContainer.style.display = "block";
     
     let html = `<div style="display: flex; gap: 15px; justify-content: space-between; margin-bottom: 12px;">`;
     
-    // Left column
     html += `<div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">`;
     leftItems.forEach(item => {
-      html += `<button type="button" class="matching-btn left-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 10px; border-radius: 6px; font-family: 'VT323'; font-size: 20px; cursor: pointer; text-align: center; transition: all 0.2s;">${item}</button>`;
+      html += `<button type="button" class="matching-btn left-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 8px; border-radius: 6px; font-family: 'VT323'; font-size: 18px; cursor: pointer; text-align: center; transition: all 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item}</button>`;
     });
     html += `</div>`;
     
-    // Right column
     html += `<div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">`;
     rightItems.forEach(item => {
-      html += `<button type="button" class="matching-btn right-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 10px; border-radius: 6px; font-family: 'VT323'; font-size: 20px; cursor: pointer; text-align: center; transition: all 0.2s;">${item}</button>`;
+      html += `<button type="button" class="matching-btn right-btn" data-item="${item}" style="background: #2c3e50; border: 2px solid #555; color: #fff; padding: 8px; border-radius: 6px; font-family: 'VT323'; font-size: 18px; cursor: pointer; text-align: center; transition: all 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item}</button>`;
     });
     html += `</div>`;
     
@@ -412,28 +484,28 @@ function _syncOverlay() {
       if (_state === 'active') submitAnswer(currentMatches);
     });
   }
-  else if (type === 'dragdrop') {
+  else if (type === 'dragdrop' || type === 'dragdrop_text') {
     answersContainer.className = "quiz-answers dragdrop-layout";
     answersContainer.style.display = "block";
     
-    const textPattern = _question.text || "";
-    const choices = _question.choices || [];
+    const textPattern = _question.question || "";
+    const choices = extra.choices || _question.choices || [];
     
     let formattedText = textPattern;
     const slotCount = (textPattern.match(/\{slot\d+\}/g) || []).length;
     
     for (let i = 0; i < slotCount; i++) {
       formattedText = formattedText.replace(`{slot${i}}`, `
-        <span class="drag-slot" data-slot="${i}" style="display: inline-block; min-width: 90px; height: 28px; border-bottom: 3px solid #f5c04a; background: rgba(255,255,255,0.08); text-align: center; font-weight: bold; color: #ffd700; margin: 0 5px; cursor: pointer; padding: 0 4px; line-height: 28px; border-radius: 4px; vertical-align: middle;">___</span>
+        <span class="drag-slot" data-slot="${i}" style="display: inline-block; min-width: 80px; height: 26px; border-bottom: 3px solid #f5c04a; background: rgba(255,255,255,0.08); text-align: center; font-weight: bold; color: #ffd700; margin: 0 4px; cursor: pointer; padding: 0 4px; line-height: 26px; border-radius: 4px; vertical-align: middle;">___</span>
       `);
     }
     
-    qText.innerHTML = `<div style="font-size: 20px; line-height: 1.5; color: #fff; margin-bottom: 15px;">${formattedText}</div>`;
+    qText.innerHTML = `<div style="font-size: 18px; line-height: 1.5; color: #fff; margin-bottom: 12px;">${formattedText}</div>`;
     
-    let html = `<div style="text-align: center; margin: 10px 0; font-size: 16px; color: #aaa;">Sélectionne un mot, puis clique sur l'emplacement (_) :</div>`;
-    html += `<div class="drag-chips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;">`;
+    let html = `<div style="text-align: center; margin: 8px 0; font-size: 14px; color: #aaa;">Sélectionne un mot, puis clique sur l'emplacement (_) :</div>`;
+    html += `<div class="drag-chips" style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">`;
     choices.forEach(word => {
-      html += `<button type="button" class="drag-chip-btn" data-word="${word}" style="background: #34495e; border: 2px solid #000; box-shadow: 2px 2px 0 #000; color: #fff; padding: 6px 12px; border-radius: 4px; font-family: 'VT323'; font-size: 18px; cursor: pointer; transition: all 0.2s;">${word}</button>`;
+      html += `<button type="button" class="drag-chip-btn" data-word="${word}" style="background: #34495e; border: 2px solid #000; box-shadow: 2px 2px 0 #000; color: #fff; padding: 5px 10px; border-radius: 4px; font-family: 'VT323'; font-size: 16px; cursor: pointer; transition: all 0.2s;">${word}</button>`;
     });
     html += `</div>`;
     html += `<button type="button" id="dragValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;" disabled>VALIDER LES RÉPONSES</button>`;
@@ -446,7 +518,7 @@ function _syncOverlay() {
     const chipBtns = answersContainer.querySelectorAll('.drag-chip-btn');
     const slotSpans = qText.querySelectorAll('.drag-slot');
     const validateBtn = answersContainer.querySelector('#dragValidateBtn');
-
+ 
     chipBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -499,6 +571,144 @@ function _syncOverlay() {
         for (let i = 0; i < slotSpans.length; i++) {
           answersArray.push(filledSlots[i] || "");
         }
+        submitAnswer(answersArray);
+      }
+    });
+  }
+  else if (type === 'dragdrop_image') {
+    answersContainer.className = "quiz-answers dragdrop-image-layout";
+    answersContainer.style.display = "block";
+    
+    const imageName = extra.image || "carte_france";
+    const labels = extra.labels || [];
+    const slots = extra.slots || [];
+    
+    let html = `<div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 12px; height: 160px;">`;
+    
+    html += `
+      <div id="ddiImageArea" style="position: relative; width: 200px; height: 150px; flex-shrink: 0; border: 2px solid #555; border-radius: 8px; overflow: hidden; background: #222;">
+        ${_getImageBackgroundHtml(imageName)}
+    `;
+    
+    slots.forEach((slot, idx) => {
+      html += `
+        <div class="ddi-slot" data-idx="${idx}" style="position: absolute; left: ${slot.x}%; top: ${slot.y}%; transform: translate(-50%, -50%); width: 70px; height: 22px; border: 2px dashed #f5c04a; background: rgba(0,0,0,0.7); color: #fff; text-align: center; font-size: 10px; font-weight: bold; border-radius: 4px; line-height: 18px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px;">
+          ?
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    
+    html += `<div style="flex: 1; display: flex; flex-direction: column; gap: 6px; height: 150px; overflow-y: auto; padding: 6px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid #444;">`;
+    html += `<span style="font-size: 11px; color: #aaa; text-align: center; display:block; margin-bottom:4px;">Sélectionne puis clique sur (?) :</span>`;
+    html += `<div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">`;
+    labels.forEach(lbl => {
+      html += `<button type="button" class="ddi-label-btn" data-label="${lbl}" style="background: #34495e; border: 1px solid #000; box-shadow: 2px 2px 0 #000; color: #fff; padding: 4px 8px; border-radius: 4px; font-family: 'VT323'; font-size: 14px; cursor: pointer; transition: all 0.2s;">${lbl}</button>`;
+    });
+    html += `</div></div>`;
+    
+    html += `</div>`;
+    html += `<button type="button" id="ddiValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;" disabled>VALIDER LES CIBLES</button>`;
+    
+    answersContainer.innerHTML = html;
+    
+    let selectedLabel = null;
+    const filledSlots = {};
+    
+    const labelBtns = answersContainer.querySelectorAll('.ddi-label-btn');
+    const slotDivs = answersContainer.querySelectorAll('.ddi-slot');
+    const validateBtn = answersContainer.querySelector('#ddiValidateBtn');
+    
+    labelBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        labelBtns.forEach(b => b.style.outline = 'none');
+        selectedLabel = btn.dataset.label;
+        btn.style.outline = '3px solid #f5c04a';
+      });
+    });
+
+    slotDivs.forEach(div => {
+      div.addEventListener('click', (e) => {
+        e.preventDefault();
+        const slotIdx = div.dataset.idx;
+        
+        if (filledSlots[slotIdx]) {
+          const oldLabel = filledSlots[slotIdx];
+          delete filledSlots[slotIdx];
+          div.textContent = "?";
+          div.style.background = "rgba(0,0,0,0.7)";
+          div.style.borderColor = "#f5c04a";
+          
+          const labelBtn = Array.from(labelBtns).find(b => b.dataset.label === oldLabel);
+          if (labelBtn) {
+            labelBtn.style.opacity = '1';
+            labelBtn.style.pointerEvents = 'auto';
+          }
+        } else if (selectedLabel) {
+          filledSlots[slotIdx] = selectedLabel;
+          div.textContent = selectedLabel;
+          div.style.background = "#2ecc71";
+          div.style.borderColor = "#27ae60";
+          
+          const labelBtn = Array.from(labelBtns).find(b => b.dataset.label === selectedLabel);
+          if (labelBtn) {
+            labelBtn.style.opacity = '0.3';
+            labelBtn.style.pointerEvents = 'none';
+          }
+          
+          labelBtns.forEach(b => b.style.outline = 'none');
+          selectedLabel = null;
+        }
+
+        const count = Object.keys(filledSlots).length;
+        validateBtn.disabled = count < slots.length;
+      });
+    });
+
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (_state === 'active') {
+        const answersArray = [];
+        for (let i = 0; i < slots.length; i++) {
+          answersArray.push(filledSlots[i] || "");
+        }
+        submitAnswer(answersArray);
+      }
+    });
+  }
+  else if (type === 'missing_words') {
+    answersContainer.className = "quiz-answers missing-words-layout";
+    answersContainer.style.display = "block";
+    
+    const textPattern = _question.question || "";
+    const dropdowns = extra.dropdowns || [];
+    
+    let formattedText = textPattern;
+    dropdowns.forEach((options, idx) => {
+      let selectHtml = `<select class="mw-select-element" data-idx="${idx}" style="background: #1a2238; color: #fff; border: 1px solid #555; padding: 4px 8px; border-radius: 4px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; margin: 0 4px; outline: none; vertical-align: middle;">`;
+      selectHtml += `<option value="">-- choisir --</option>`;
+      options.forEach(opt => {
+        selectHtml += `<option value="${opt}">${opt}</option>`;
+      });
+      selectHtml += `</select>`;
+      formattedText = formattedText.replace(`{select${idx}}`, selectHtml);
+    });
+    
+    qText.innerHTML = `<div style="font-size: 16px; line-height: 1.6; color: #fff; margin-bottom: 15px;">${formattedText}</div>`;
+    
+    answersContainer.innerHTML = `
+      <button type="button" id="mwValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;">VALIDER LES RÉPONSES</button>
+    `;
+    
+    const selects = qText.querySelectorAll('.mw-select-element');
+    const validateBtn = answersContainer.querySelector('#mwValidateBtn');
+    
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (_state === 'active') {
+        const answersArray = Array.from(selects).map(sel => sel.value);
         submitAnswer(answersArray);
       }
     });
@@ -626,19 +836,36 @@ function _resolveAnswer(choice) {
   if (type === 'qcm') {
     correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);
   } else if (type === 'tf') {
-    // choice is 'VRAI' or 'FAUX', correct_answer is 'VRAI' or 'FAUX'
     correct = String(choice).toUpperCase() === String(_question.correct_answer).toUpperCase();
+  } else if (type === 'short_answer') {
+    correct = String(choice).trim().toLowerCase() === String(_question.correct_answer).trim().toLowerCase();
   } else if (type === 'matching') {
-    // choice is an object {leftItem: rightItem}
-    // correct_answer is also an object {leftItem: rightItem}
-    const expected = _question.correct_answer || {};
+    let expected = _question.correct_answer;
+    if (typeof expected === 'string') {
+      try { expected = JSON.parse(expected); } catch(e) { expected = {}; }
+    }
     correct = typeof choice === 'object' && choice !== null &&
-      Object.keys(expected).every(k => String(choice[k]).trim() === String(expected[k]).trim());
-  } else if (type === 'dragdrop') {
-    // choice is an array of filled words per slot
-    // correct_answer is an array of expected words
-    const expected = _question.correct_answer || [];
-    correct = Array.isArray(choice) &&
+      Object.keys(expected).every(k => String(choice[k]).trim().toLowerCase() === String(expected[k]).trim().toLowerCase());
+  } else if (type === 'dragdrop' || type === 'dragdrop_text') {
+    let expected = _question.correct_answer;
+    if (typeof expected === 'string') {
+      try { expected = JSON.parse(expected); } catch(e) { expected = [expected]; }
+    }
+    correct = Array.isArray(choice) && Array.isArray(expected) &&
+      expected.every((ans, i) => String(choice[i]).trim().toLowerCase() === String(ans).trim().toLowerCase());
+  } else if (type === 'dragdrop_image') {
+    let expected = _question.correct_answer;
+    if (typeof expected === 'string') {
+      try { expected = JSON.parse(expected); } catch(e) { expected = []; }
+    }
+    correct = Array.isArray(choice) && Array.isArray(expected) &&
+      expected.every((ans, i) => String(choice[i]).trim().toLowerCase() === String(ans).trim().toLowerCase());
+  } else if (type === 'missing_words') {
+    let expected = _question.correct_answer;
+    if (typeof expected === 'string') {
+      try { expected = JSON.parse(expected); } catch(e) { expected = []; }
+    }
+    correct = Array.isArray(choice) && Array.isArray(expected) &&
       expected.every((ans, i) => String(choice[i]).trim().toLowerCase() === String(ans).trim().toLowerCase());
   } else {
     correct = _normalizeChoice(choice) === _normalizeChoice(_question.correct_answer);

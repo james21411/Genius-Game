@@ -98,20 +98,66 @@ def create_class():
     name = data.get('name')
     subject = data.get('subject', 'Général')
     grade = data.get('grade', 'Inconnu')
+    code = data.get('code')
     
     if not teacher_id or not name:
         return jsonify({"error": "Nom de classe requis"}), 400
-    
-    code = generate_class_code()
-    
+        
+    if code:
+        code = code.strip().upper()
+    else:
+        code = generate_class_code()
+        
     conn = get_db()
-    conn.execute("INSERT INTO classes (teacher_id, name, code, subject, grade) VALUES (?, ?, ?, ?, ?)",
-                 (teacher_id, name, code, subject, grade))
-    conn.commit()
-    class_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.close()
+    existing = conn.execute("SELECT id FROM classes WHERE code = ?", (code,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": f"La clé '{code}' est déjà utilisée par une autre classe."}), 400
+        
+    try:
+        conn.execute("INSERT INTO classes (teacher_id, name, code, subject, grade) VALUES (?, ?, ?, ?, ?)",
+                     (teacher_id, name, code, subject, grade))
+        conn.commit()
+        class_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.close()
+        return jsonify({"class_id": class_id, "code": code}), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/classes/<int:class_id>', methods=['PUT'])
+def update_class(class_id):
+    data = request.json
+    name = data.get('name')
+    code = data.get('code')
+    subject = data.get('subject', 'Général')
+    grade = data.get('grade', 'Inconnu')
     
-    return jsonify({"class_id": class_id, "code": code}), 201
+    if not name or not code:
+        return jsonify({"error": "Nom et clé de classe requis"}), 400
+        
+    code = code.strip().upper()
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM classes WHERE code = ? AND id != ?", (code, class_id)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": f"La clé '{code}' est déjà utilisée par une autre classe."}), 400
+        
+    conn.execute("""
+        UPDATE classes SET name = ?, code = ?, subject = ?, grade = ?
+        WHERE id = ?
+    """, (name, code, subject, grade, class_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Classe mise à jour", "code": code}), 200
+
+@app.route('/api/classes/<int:class_id>', methods=['DELETE'])
+def delete_class(class_id):
+    conn = get_db()
+    conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Classe supprimée"}), 200
 
 # --- STUDENT ENROLLMENT ---
 
@@ -154,23 +200,51 @@ def create_world():
     name = data.get('name')
     topic = data.get('topic')
     subject = data.get('subject', 'Général')
+    mode = data.get('mode', 'lesson')
     
     if not class_id or not name or not topic:
         return jsonify({"error": "Données manquantes"}), 400
     
     conn = get_db()
-    # Trouver le dernier index de monde
     last_idx = conn.execute("SELECT MAX(world_index) FROM worlds WHERE class_id = ?", (class_id,)).fetchone()[0] or 0
     
     conn.execute("""
         INSERT INTO worlds (class_id, world_index, name, subject, topic, mode, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (class_id, last_idx + 1, name, subject, topic, 'lesson', 1))
+    """, (class_id, last_idx + 1, name, subject, topic, mode, 1))
     conn.commit()
     world_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
     
     return jsonify({"world_id": world_id}), 201
+
+@app.route('/api/worlds/<int:world_id>', methods=['PUT'])
+def update_world(world_id):
+    data = request.json
+    name = data.get('name')
+    topic = data.get('topic')
+    subject = data.get('subject', 'Général')
+    mode = data.get('mode', 'lesson')
+    
+    if not name or not topic:
+        return jsonify({"error": "Nom et thème requis"}), 400
+        
+    conn = get_db()
+    conn.execute("""
+        UPDATE worlds SET name = ?, topic = ?, subject = ?, mode = ?
+        WHERE id = ?
+    """, (name, topic, subject, mode, world_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Monde mis à jour"}), 200
+
+@app.route('/api/worlds/<int:world_id>', methods=['DELETE'])
+def delete_world(world_id):
+    conn = get_db()
+    conn.execute("DELETE FROM worlds WHERE id = ?", (world_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Monde supprimé"}), 200
 
 # --- GAME API (Existing logic) ---
 
@@ -187,15 +261,72 @@ def join_class():
         return jsonify({"error": "Code de classe invalide"}), 404
     
     class_id = class_row['id']
-    student = conn.execute("SELECT id, class_id FROM students WHERE name = ? AND class_id = ?", (name, class_id)).fetchone()
+    student = conn.execute("SELECT id, class_id, xp FROM students WHERE name = ? AND class_id = ?", (name, class_id)).fetchone()
     
     if not student:
         conn.execute("INSERT INTO students (class_id, name) VALUES (?, ?)", (class_id, name))
         conn.commit()
-        student = conn.execute("SELECT id, class_id FROM students WHERE name = ? AND class_id = ?", (name, class_id)).fetchone()
+        student = conn.execute("SELECT id, class_id, xp FROM students WHERE name = ? AND class_id = ?", (name, class_id)).fetchone()
     
     conn.close()
     return jsonify(dict(student))
+
+@app.route('/api/sessions', methods=['POST'])
+def create_session():
+    data = request.json
+    student_id = data.get('student_id')
+    class_id = data.get('class_id')
+    world_id = data.get('world_id')
+    game_level = data.get('game_level', 1)
+    mode = data.get('mode', 'lesson')
+    
+    if not student_id or not class_id:
+        return jsonify({"error": "Données manquantes"}), 400
+        
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO sessions (student_id, class_id, world_id, game_level, mode)
+        VALUES (?, ?, ?, ?, ?)
+    """, (student_id, class_id, world_id, game_level, mode))
+    conn.commit()
+    session_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    return jsonify({"session_id": session_id}), 201
+
+@app.route('/api/answers', methods=['POST'])
+def record_answer():
+    data = request.json
+    session_id = data.get('session_id')
+    question_id = data.get('question_id')
+    student_id = data.get('student_id')
+    given_answer = data.get('given_answer')
+    is_correct = data.get('is_correct', 0)
+    time_taken = data.get('time_taken', 0.0)
+    attempt_number = data.get('attempt_number', 1)
+    
+    if not session_id or not question_id or not student_id:
+        return jsonify({"error": "Données manquantes"}), 400
+        
+    if isinstance(given_answer, (dict, list)):
+        given_answer = json.dumps(given_answer)
+    else:
+        given_answer = str(given_answer)
+        
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO answers (session_id, question_id, student_id, given_answer, is_correct, time_taken, attempt_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (session_id, question_id, student_id, given_answer, is_correct, time_taken, attempt_number))
+    
+    # Update student XP
+    if is_correct:
+        q_row = conn.execute("SELECT xp_reward FROM questions WHERE id = ?", (question_id,)).fetchone()
+        xp_gain = q_row['xp_reward'] if q_row else 50
+        conn.execute("UPDATE students SET xp = xp + ? WHERE id = ?", (xp_gain, student_id))
+        
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Réponse enregistrée"}), 201
 
 @app.route('/api/questions', methods=['GET'])
 def get_questions():
@@ -218,14 +349,42 @@ def add_question():
     conn = get_db()
     conn.execute("""
         INSERT INTO questions (world_id, class_id, type, subject, topic, bloom_level, question, 
-                             answer_a, answer_b, answer_c, answer_d, correct_answer, explanation)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                             time_limit, xp_reward, difficulty, extra_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (data.get('world_id'), data.get('class_id'), data.get('type', 'qcm'), data.get('subject'), data.get('topic'),
           data.get('bloom_level'), data.get('question'), data.get('answer_a'), data.get('answer_b'),
-          data.get('answer_c'), data.get('answer_d'), data.get('correct_answer'), data.get('explanation')))
+          data.get('answer_c'), data.get('answer_d'), data.get('correct_answer'), data.get('explanation'),
+          data.get('time_limit', 15), data.get('xp_reward', 50), data.get('difficulty', 1), data.get('extra_data')))
     conn.commit()
     conn.close()
     return jsonify({"message": "Question ajoutée"}), 201
+
+@app.route('/api/questions/<int:question_id>', methods=['PUT'])
+def update_question(question_id):
+    data = request.json
+    conn = get_db()
+    conn.execute("""
+        UPDATE questions SET 
+            type = ?, subject = ?, topic = ?, bloom_level = ?, question = ?,
+            answer_a = ?, answer_b = ?, answer_c = ?, answer_d = ?,
+            correct_answer = ?, explanation = ?, xp_reward = ?, time_limit = ?, extra_data = ?
+        WHERE id = ?
+    """, (data.get('type'), data.get('subject'), data.get('topic'), data.get('bloom_level'), data.get('question'),
+          data.get('answer_a'), data.get('answer_b'), data.get('answer_c'), data.get('answer_d'),
+          data.get('correct_answer'), data.get('explanation'), data.get('xp_reward', 50), data.get('time_limit', 15),
+          data.get('extra_data'), question_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Question mise à jour"}), 200
+
+@app.route('/api/questions/<int:question_id>', methods=['DELETE'])
+def delete_question(question_id):
+    conn = get_db()
+    conn.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Question supprimée"}), 200
 
 # --- ANALYTICS ---
 

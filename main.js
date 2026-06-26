@@ -57,12 +57,32 @@ function updateLevelDisplay() {
   nextLvlBtn.disabled = selectedWorldIndex >= availableWorlds.length - 1;
 }
 
+let allWorlds = [];
+
+function filterWorldsByMode() {
+  const selectedMode = document.querySelector('input[name="gameMode"]:checked')?.value || 'lesson';
+  window.gameMode = selectedMode;
+  if (selectedMode === 'free') {
+    availableWorlds = allWorlds;
+  } else {
+    availableWorlds = allWorlds.filter(w => w.mode === selectedMode);
+  }
+  selectedWorldIndex = 0;
+  updateLevelDisplay();
+}
+
+// Listen to mode changes
+document.querySelectorAll('input[name="gameMode"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    filterWorldsByMode();
+  });
+});
+
 async function verifyClass() {
   const code = document.getElementById('class-code').value.trim();
   if (!code) return alert("Entrez un code !");
   
   try {
-    // On cherche d'abord la classe pour avoir son ID
     const res = await fetch(`http://localhost:5001/api/students/join`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -71,11 +91,9 @@ async function verifyClass() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     
-    // On récupère les mondes de cette classe
     const wRes = await fetch(`http://localhost:5001/api/classes/${data.class_id}/worlds`);
-    availableWorlds = await wRes.json();
-    selectedWorldIndex = 0;
-    updateLevelDisplay();
+    allWorlds = await wRes.json();
+    filterWorldsByMode();
   } catch (err) {
     alert("Code de classe invalide ou introuvable.");
   }
@@ -90,6 +108,7 @@ async function startGame() {
   const codeInput = document.getElementById('class-code');
   const studentName = nameInput ? nameInput.value.trim() : 'Élève Demo';
   const classCode = codeInput ? codeInput.value.trim() : 'DEMO-2026';
+  const activeWorld = availableWorlds[selectedWorldIndex];
 
   try {
     // 1. Rejoindre la classe
@@ -109,7 +128,9 @@ async function startGame() {
         body: JSON.stringify({ 
           student_id: studentData.id, 
           class_id: studentData.class_id,
-          game_level: window.currentLevel
+          world_id: activeWorld ? activeWorld.id : null,
+          game_level: activeWorld ? activeWorld.world_index : 1,
+          mode: window.gameMode || 'lesson'
         })
       });
 
@@ -120,6 +141,7 @@ async function startGame() {
           session_id: sessionData.session_id,
           student_id: studentData.id,
           class_id: studentData.class_id,
+          world_id: activeWorld ? activeWorld.id : null,
           name: studentName || 'Élève Anonyme'
         });
         console.log("✅ Session éducative démarrée");
@@ -129,7 +151,6 @@ async function startGame() {
     console.warn("⚠️ Mode hors-ligne: le backend n'est pas accessible.", err);
   }
 
-  const activeWorld = availableWorlds[selectedWorldIndex];
   window.currentWorldId = activeWorld ? activeWorld.id : null;
 
   if (window.currentWorldId) {

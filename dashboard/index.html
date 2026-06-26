@@ -2,328 +2,604 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Genius Jump EDU — Guilde du Maître</title>
+  <title>Genius Jump EDU — Espace Enseignant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <!-- Modern clean typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  
-  <!-- Overlay d'Authentification (Gamifié) -->
-  <div id="auth-overlay" class="pixel-panel">
-    <div class="auth-box">
-      <h1 class="menu-title">ACCÈS<br>GUILDE</h1>
-      <div id="login-form" class="editor-form">
-        <div class="input-group">
-          <label>Email du Maître</label>
-          <input type="email" id="auth-email" placeholder="maitre@guilde.edu" required>
+
+  <!-- Connexion Overlay -->
+  <div id="auth-overlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo">🛡️</div>
+        <h2>Guilde des Maîtres</h2>
+        <p>Espace de configuration pédagogique Genius Jump</p>
+      </div>
+
+      <!-- Login Form -->
+      <div id="login-form" class="auth-form-container">
+        <div class="form-group">
+          <label for="auth-email">Adresse e-mail</label>
+          <input type="email" id="auth-email" placeholder="maitre@guilde.edu" required autocomplete="email">
         </div>
-        <div class="input-group">
-          <label>Mot de Passe</label>
-          <input type="password" id="auth-password" placeholder="••••••••" required>
+        <div class="form-group">
+          <label for="auth-password">Mot de passe</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="current-password">
         </div>
-        <div class="action-row">
-          <button id="btn-login" class="arcade-btn">SE CONNECTER</button>
-          <button id="btn-show-register" class="arcade-btn blue-btn">S'INSCRIRE</button>
+        <div class="auth-actions">
+          <button id="btn-login" class="btn btn-primary btn-block">Se connecter</button>
+          <button id="btn-show-register" class="btn btn-link btn-block">Pas encore de compte ? S'inscrire</button>
         </div>
       </div>
 
-      <div id="register-form" class="editor-form hidden">
-        <div class="input-group">
-          <label>Nom du Maître</label>
-          <input type="text" id="reg-name" placeholder="Prof. Chen">
+      <!-- Register Form -->
+      <div id="register-form" class="auth-form-container hidden">
+        <div class="form-group">
+          <label for="reg-name">Nom complet</label>
+          <input type="text" id="reg-name" placeholder="Prof. Alexandre" required autocomplete="name">
         </div>
-        <div class="input-group">
-          <label>Email</label>
-          <input type="email" id="reg-email" placeholder="chen@guilde.edu">
+        <div class="form-group">
+          <label for="reg-email">Adresse e-mail</label>
+          <input type="email" id="reg-email" placeholder="alexandre@guilde.edu" required autocomplete="email">
         </div>
-        <div class="input-group">
-          <label>Mot de Passe</label>
-          <input type="password" id="reg-password" placeholder="••••••••">
+        <div class="form-group">
+          <label for="reg-password">Mot de passe</label>
+          <input type="password" id="reg-password" placeholder="••••••••" required autocomplete="new-password">
         </div>
-        <div class="action-row">
-          <button id="btn-register" class="arcade-btn">CRÉER LE COMPTE</button>
-          <button id="btn-show-login" class="arcade-btn grey-btn">RETOUR</button>
+        <div class="auth-actions">
+          <button id="btn-register" class="btn btn-success btn-block">Créer un compte</button>
+          <button id="btn-show-login" class="btn btn-link btn-block">Déjà inscrit ? Connexion</button>
         </div>
       </div>
-      <div id="auth-feedback" class="feedback-msg"></div>
+
+      <div id="auth-feedback" class="auth-feedback"></div>
     </div>
   </div>
 
-  <div id="game-app" class="hidden">
-    <!-- Navbar / Guild Banner -->
-    <header class="guild-banner">
-      <div class="banner-left">
-        <img src="../boss1.png" alt="Guild Master" class="avatar-boss">
-        <div class="title-container">
-          <h1 id="teacher-name">LA GUILDE</h1>
-          <span class="subtitle">Maître du Jeu</span>
+  <!-- Main Application Layout -->
+  <div id="game-app" class="dashboard-container hidden">
+    
+    <!-- Sidebar gauche (Style Moodle / CodeCombat) -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🎮</span>
+        <div class="brand-details">
+          <h3>Genius Jump</h3>
+          <span>Portail Enseignant</span>
         </div>
       </div>
-      <div class="banner-right">
-        <div class="class-selector">
-          <label>Personnage :</label>
-          <select id="character-select" class="menu-input">
-            <option value="duthant">Duthant</option>
-            <option value="etoundi">Etoundi</option>
-            <option value="maylis">Maylis</option>
-          </select>
-        </div>
-        <div class="class-selector">
-          <label>Classe active :</label>
-          <select id="class-select" class="menu-input">
-            <option value="">Chargement...</option>
-          </select>
-          <button id="btn-new-class" class="arcade-btn blue-btn mini-btn">+</button>
-        </div>
-        <div class="class-scroll">
-          <span class="scroll-label">Code d'accès:</span>
-          <strong id="nav-class-code" class="scroll-value">-</strong>
-        </div>
-        <button id="btn-logout" class="arcade-btn grey-btn mini-btn">🚪</button>
-      </div>
-    </header>
 
-    <main class="quest-board">
-      
-      <!-- 1. Stats globales -->
-      <section class="pixel-panel stats-panel">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
-          <h2 class="panel-title" style="margin:0; border:0;">🏆 Trésor de la Guilde</h2>
-          <button id="btn-export" class="arcade-btn mini-btn grey-btn">RAPPORT 📥</button>
+      <nav class="sidebar-menu">
+        <a href="#" class="menu-item active" data-tab="dashboard">
+          <span class="menu-icon">📊</span>
+          <span>Tableau de Bord</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="classes">
+          <span class="menu-icon">🏫</span>
+          <span>Classes & Clés</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="evaluations">
+          <span class="menu-icon">🎯</span>
+          <span>Évaluations & Leçons</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="questions">
+          <span class="menu-icon">📚</span>
+          <span>Banque de Questions</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="results">
+          <span class="menu-icon">📜</span>
+          <span>Registre des Héros</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-user">
+        <img src="../boss1.png" alt="Avatar Enseignant" class="user-avatar">
+        <div class="user-info">
+          <strong id="teacher-name">Professeur</strong>
+          <span>Maître du Jeu</span>
         </div>
-        <div class="stats-row" id="overview-stats">
-          <div class="stat-box">
-            <img src="../player.png" alt="Héros" class="stat-icon">
-            <div class="stat-value" id="stat-active">0</div>
-            <div class="stat-label">Héros Actifs</div>
+        <button id="btn-logout" class="btn-logout" title="Déconnexion">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+      
+      <!-- Top Header Navigation -->
+      <header class="content-header">
+        <div class="header-left">
+          <h2 id="current-tab-title">Tableau de Bord</h2>
+          <p id="current-tab-desc">Statistiques globales et activité récente de vos élèves.</p>
+        </div>
+        <div class="header-right">
+          <div class="class-picker-wrapper">
+            <label for="class-select">Classe Active :</label>
+            <select id="class-select" class="form-select">
+              <option value="">Chargement...</option>
+            </select>
           </div>
-          <div class="stat-box">
-            <img src="../coin.png" alt="Pièce" class="stat-icon">
-            <div class="stat-value" id="stat-avg">0%</div>
-            <div class="stat-label">Victoires</div>
+          <div class="class-code-badge">
+            <span>Clé d'accès élève :</span>
+            <strong id="nav-class-code">-</strong>
           </div>
-          <div class="stat-box">
-            <img src="../boss3.png" alt="Boss" class="stat-icon">
-            <div class="stat-value" id="stat-sessions">0</div>
-            <div class="stat-label">Quêtes Réussies</div>
+        </div>
+      </header>
+
+      <!-- Panel: Tableau de Bord -->
+      <section id="panel-dashboard" class="tab-panel">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon bg-blue">👥</div>
+            <div class="stat-details">
+              <h4 id="stat-active">0</h4>
+              <p>Héros Actifs</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon bg-green">🏆</div>
+            <div class="stat-details">
+              <h4 id="stat-avg">0%</h4>
+              <p>Taux de Survie Moyen</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon bg-purple">⚡</div>
+            <div class="stat-details">
+              <h4 id="stat-sessions">0</h4>
+              <p>Quêtes Réalisées</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-row">
+          <!-- Leaderboard -->
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>📜 Registre d'Honneur (XP des Héros)</h3>
+            </div>
+            <div class="card-body scrollable">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Héros</th>
+                    <th>Niveau</th>
+                    <th>XP Gagnés</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-students-body">
+                  <tr><td colspan="4" class="text-center">Aucun élève connecté.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Heatmap -->
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3>⚔️ Rapport de Bataille (Questions Difficiles)</h3>
+            </div>
+            <div class="card-body scrollable">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Épreuve (Question)</th>
+                    <th>Difficulté</th>
+                    <th>Taux de Réussite</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-heatmap-body">
+                  <tr><td colspan="3" class="text-center">Aucune épreuve tentée.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
 
-      <div class="split-layout">
-        <!-- 3. Liste des élèves -->
-        <section class="pixel-panel students-panel">
-          <h2 class="panel-title">📜 Registre des Héros</h2>
-          <div class="table-wrapper">
-            <table class="rpg-table" id="students-table">
+      <!-- Panel: Classes & Clés -->
+      <section id="panel-classes" class="tab-panel hidden">
+        <div class="toolbar">
+          <button id="btn-create-class-modal" class="btn btn-primary">➕ Créer une Nouvelle Classe</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>🏫 Vos Classes Actives</h3>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Héros</th>
-                  <th>Magot (XP)</th>
+                  <th>Nom de la Classe</th>
+                  <th>Matière</th>
                   <th>Niveau</th>
-                  <th>Précision</th>
+                  <th>Clé d'Accès Élève (Code)</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                <!-- Rempli par JS -->
+              <tbody id="classes-list-body">
+                <!-- Chargé dynamiquement -->
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
-        <!-- 2. Heatmap des questions -->
-        <section class="pixel-panel heatmap-panel">
-          <h2 class="panel-title">⚔️ Rapport de Bataille</h2>
-          <div class="table-wrapper">
-            <table class="rpg-table" id="heatmap-table">
+        <!-- Class Modal -->
+        <div id="class-modal" class="modal hidden">
+          <div class="modal-content">
+            <h2 id="class-modal-title">Créer une Classe</h2>
+            <form id="class-form">
+              <input type="hidden" id="modal-class-id">
+              <div class="form-group">
+                <label for="class-name-input">Nom de la classe (ex: CM2-A)</label>
+                <input type="text" id="class-name-input" placeholder="CM2-A" required>
+              </div>
+              <div class="form-group">
+                <label for="class-subject-input">Matière Principale</label>
+                <input type="text" id="class-subject-input" placeholder="Mathématiques" value="Mathématiques">
+              </div>
+              <div class="form-group">
+                <label for="class-grade-input">Niveau Scolaire</label>
+                <input type="text" id="class-grade-input" placeholder="CM2" value="CM2">
+              </div>
+              <div class="form-group">
+                <label for="class-code-input">Clé d'accès élève personnalisée (Optionnel - 8 caractères max)</label>
+                <input type="text" id="class-code-input" placeholder="Laisser vide pour auto-générer" maxlength="8">
+                <span class="input-help">La clé d'accès permettra aux élèves de s'inscrire ou de se connecter.</span>
+              </div>
+              <div class="modal-buttons">
+                <button type="button" id="btn-close-class-modal" class="btn btn-secondary">Annuler</button>
+                <button type="submit" class="btn btn-success">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Évaluations & Leçons -->
+      <section id="panel-evaluations" class="tab-panel hidden">
+        <div class="alert-info">
+          <strong>Mode Leçon vs Mode Évaluation :</strong> Les chapitres configurés comme <strong>Évaluation</strong> imposent un temps limité aux élèves, n'autorisent qu'un seul essai par question et sont punitifs en vies. Les <strong>Leçons</strong> guident l'élève avec des explications. (Remarque : Le mode complet d'évaluation est implémenté, les leçons seront finalisées ultérieurement).
+        </div>
+
+        <div class="toolbar">
+          <button id="btn-create-world-modal" class="btn btn-primary">➕ Créer une Évaluation / Leçon</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>🎯 Chapitres et Évaluations de la Classe</h3>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Épreuve (Question)</th>
-                  <th>Difficulté</th>
-                  <th>Taux de Survie</th>
+                  <th>Nom du Chapitre</th>
+                  <th>Thème / Sujet Spécifique</th>
+                  <th>Mode de Jeu</th>
+                  <th>Index de Monde</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                <!-- Rempli par JS -->
+              <tbody id="worlds-list-body">
+                <!-- Chargé dynamiquement -->
               </tbody>
             </table>
           </div>
-        </section>
-      </div>
-
-      <!-- 4. Le Grimoire (Éditeur Dynamique) -->
-      <section class="pixel-panel editor-panel">
-        <h2 class="panel-title">🪄 Le Grimoire des Épreuves</h2>
-        
-        <div class="grimoire-tabs">
-          <button id="tab-add" class="arcade-btn mini-btn active">FORGER UN SORT</button>
-          <button id="tab-list" class="arcade-btn mini-btn blue-btn">BIBLIOTHÈQUE (<span id="q-count">0</span>)</button>
-          <button id="tab-import" class="arcade-btn mini-btn grey-btn">IMPORTER CSV</button>
-          <button id="tab-ai" class="arcade-btn mini-btn purple-btn">IA MAGIQUE ✨</button>
         </div>
 
-        <!-- Section: IA Magique -->
-        <div id="ai-section" class="hidden" style="background: rgba(40,0,80,0.3); padding: 20px; border: 2px solid #a569bd; margin-bottom: 20px;">
-          <h3 style="font-size: 14px; margin-bottom: 10px; color: #a569bd;">✨ Alchimie Algorithmique</h3>
-          <p style="font-size: 10px; color: #ccc; margin-bottom: 15px;">Collez votre cours ou support, l'IA forgera les épreuves pour vous.</p>
-          
-          <div class="input-group">
-            <label>Support de Cours (Fichier PDF, TXT ou Texte)</label>
-            <input type="file" id="ai-file" accept=".pdf,.txt" class="menu-input" style="margin-bottom:10px;">
-            <textarea id="ai-context" rows="3" placeholder="...ou collez le texte ici directement"></textarea>
-          </div>
-
-          <div class="form-row">
-            <div class="input-group">
-              <label>Nombre de Questions</label>
-              <input type="number" id="ai-num" value="5" min="1" max="10">
-            </div>
-            <div class="input-group">
-              <label>Niveau Bloom Max</label>
-              <select id="ai-bloom">
-                <option value="knowledge">LVL 1 - Mémorisation</option>
-                <option value="comprehension">LVL 2 - Compréhension</option>
-                <option value="application">LVL 3 - Application</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Types de Sortilèges</label>
-            <div style="display:flex; gap:15px; font-size:12px; margin-top:5px;">
-              <label style="color:#fff;"><input type="checkbox" checked disabled> QCM</label>
-              <label style="color:#fff;"><input type="checkbox" id="type-vf"> Vrai/Faux</label>
-              <label style="color:#fff;"><input type="checkbox" id="type-open"> Question Ouverte</label>
-            </div>
-          </div>
-
-          <button id="btn-ai-generate" class="arcade-btn purple-btn" style="width:100%; margin-top:15px;">LANCER L'ALCHIMIE ✨</button>
-          <div id="ai-feedback" class="feedback-msg"></div>
-        </div>
-
-        <!-- Section: Import CSV -->
-        <div id="import-section" class="hidden" style="background: rgba(0,0,0,0.4); padding: 20px; border: 2px dashed #666; margin-bottom: 20px;">
-          <h3 style="font-size: 14px; margin-bottom: 10px;">📥 Importer des Parchemins (CSV)</h3>
-          <p style="font-size: 10px; color: #aaa; margin-bottom: 15px;">Format: question, réponse_a, réponse_b, réponse_c, réponse_d, correct (A/B/C/D), explication</p>
-          <input type="file" id="csv-file" accept=".csv" class="menu-input">
-          <button id="btn-do-import" class="arcade-btn mini-btn" style="margin-top: 10px;">LANCER L'IMPORT</button>
-          <div id="import-feedback" class="feedback-msg"></div>
-        </div>
-
-        <!-- Section: Ajout de Chapitre (Remplace prompt) -->
-        <div id="new-world-section" class="form-row hidden" style="background: rgba(0,0,0,0.4); padding: 15px; margin: 15px 0; border: 2px solid #4a235a;">
-          <div class="input-group">
-            <label>Nom du Chapitre</label>
-            <input type="text" id="new-world-name" placeholder="Ex: Contrôle Maths">
-          </div>
-          <div class="input-group">
-            <label>Sujet Spécifique</label>
-            <input type="text" id="new-world-topic" placeholder="Ex: Géométrie">
-          </div>
-          <div class="input-group" style="flex:0.5; align-self: flex-end;">
-            <button id="btn-save-world" class="arcade-btn mini-btn">CRÉER</button>
-          </div>
-        </div>
-
-        <!-- Section: Formulaire de Question -->
-        <div id="add-q-container">
-          <div class="form-row" style="margin-bottom: 20px;">
-            <div class="input-group">
-              <label>Chapitre Actif (Sélectionner une quête)</label>
-              <select id="q-world" class="menu-input">
-                <option value="">Chargement...</option>
-              </select>
-            </div>
-            <div class="input-group" style="flex:0.3; align-self: flex-end;">
-              <button id="btn-show-new-world" class="arcade-btn blue-btn mini-btn" title="Nouveau Chapitre">+</button>
-            </div>
-          </div>
-
-          <form id="add-question-form" class="editor-form">
-            <div class="form-row">
-              <div class="input-group">
-              <label>Type de Sortilège</label>
-              <select id="q-type">
-                <option value="qcm">QCM (4 choix)</option>
-                <option value="vf">Vrai / Faux</option>
-              </select>
-            </div>
-            <div class="input-group">
-              <label>Domaine (Sujet)</label>
-              <input type="text" id="q-subject" placeholder="ex: Mathématiques">
-            </div>
-              <div class="input-group">
-                <label>Sortilège (Thème)</label>
-                <input type="text" id="q-topic" placeholder="Ex: Fractions" required>
+        <!-- World Modal -->
+        <div id="world-modal" class="modal hidden">
+          <div class="modal-content">
+            <h2 id="world-modal-title">Créer un Chapitre</h2>
+            <form id="world-form">
+              <input type="hidden" id="modal-world-id">
+              <div class="form-group">
+                <label for="world-name-input">Nom du Chapitre (ex: Contrôle de Fin de Trimestre)</label>
+                <input type="text" id="world-name-input" placeholder="Contrôle Géométrie" required>
               </div>
-            </div>
-            
-            <div class="form-row">
-              <div class="input-group">
-                <label>Niveau de Pouvoir (Bloom)</label>
-                <select id="q-bloom" required>
-                  <option value="knowledge">LVL 1 - Mémorisation</option>
-                  <option value="comprehension">LVL 2 - Compréhension</option>
-                  <option value="application">LVL 3 - Application</option>
-                  <option value="analysis">LVL 4 - Analyse</option>
+              <div class="form-group">
+                <label for="world-topic-input">Thème Spécifique (ex: Polygones)</label>
+                <input type="text" id="world-topic-input" placeholder="Fractions" required>
+              </div>
+              <div class="form-group">
+                <label for="world-subject-input">Matière</label>
+                <input type="text" id="world-subject-input" value="Mathématiques">
+              </div>
+              <div class="form-group">
+                <label for="world-mode-input">Mode de Jeu Associé</label>
+                <select id="world-mode-input" class="form-select">
+                  <option value="eval" selected>🔥 Évaluation (Temps limité, 1 essai)</option>
+                  <option value="lesson">📘 Leçon (Apprentissage guidé - Prochainement)</option>
                 </select>
               </div>
-              <div class="input-group">
-                <label>Récompense (XP)</label>
-                <input type="number" id="q-xp" value="50" required>
+              <div class="modal-buttons">
+                <button type="button" id="btn-close-world-modal" class="btn btn-secondary">Annuler</button>
+                <button type="submit" class="btn btn-success">Créer le chapitre</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Banque de Questions -->
+      <section id="panel-questions" class="tab-panel hidden">
+        <div class="questions-layout">
+          <!-- Colonne gauche: Sélections et Ajout -->
+          <div class="col-form">
+            <div class="card">
+              <div class="card-header">
+                <h3>🪄 Forger une Question d'Évaluation</h3>
+              </div>
+              <div class="card-body">
+                
+                <form id="question-form">
+                  <input type="hidden" id="modal-question-id">
+                  
+                  <div class="form-group">
+                    <label for="q-world">Chapitre / Évaluation d'affectation</label>
+                    <select id="q-world" class="form-select" required>
+                      <!-- Chargé dynamiquement -->
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group flex-1">
+                      <label for="q-type">Type de question (sans exception)</label>
+                      <select id="q-type" class="form-select" required>
+                        <option value="qcm" selected>QCM (Choix multiples)</option>
+                        <option value="tf">Vrai ou Faux</option>
+                        <option value="short_answer">Réponse courte</option>
+                        <option value="dragdrop_text">Glisser-déposer sur texte</option>
+                        <option value="dragdrop_image">Glisser-déposer sur image</option>
+                        <option value="matching">Appariement (Associer deux listes)</option>
+                        <option value="missing_words">Réponses manquantes (Dropdowns)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group flex-1">
+                      <label for="q-subject">Matière</label>
+                      <input type="text" id="q-subject" value="Mathématiques" required>
+                    </div>
+                    <div class="form-group flex-1">
+                      <label for="q-topic">Thème (Sous-sujet)</label>
+                      <input type="text" id="q-topic" placeholder="ex: Addition" required>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group flex-1">
+                      <label for="q-bloom">Niveau cognitif (Bloom)</label>
+                      <select id="q-bloom" class="form-select">
+                        <option value="knowledge">LVL 1 - Mémorisation</option>
+                        <option value="comprehension">LVL 2 - Compréhension</option>
+                        <option value="application">LVL 3 - Application</option>
+                        <option value="analysis">LVL 4 - Analyse</option>
+                      </select>
+                    </div>
+                    <div class="form-group flex-1">
+                      <label for="q-xp">Récompense (XP)</label>
+                      <input type="number" id="q-xp" value="50" min="10" max="500">
+                    </div>
+                    <div class="form-group flex-1">
+                      <label for="q-timer">Temps Limite (sec)</label>
+                      <input type="number" id="q-timer" value="15" min="5" max="300">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="q-text">L'Énoncé de la question</label>
+                    <textarea id="q-text" rows="3" placeholder="Écrivez votre question ici..." required></textarea>
+                    <div id="q-text-help" class="input-help hidden"></div>
+                  </div>
+
+                  <!-- Type-specific Configuration Fields (Containers updated in JS) -->
+                  <div id="type-specific-container" class="type-container">
+                    
+                    <!-- QCM Fields -->
+                    <div id="fields-qcm" class="q-type-fields">
+                      <div class="answers-grid">
+                        <div class="form-group">
+                          <label for="q-ans-a">Option A</label>
+                          <input type="text" id="q-ans-a" class="border-red" placeholder="Première réponse">
+                        </div>
+                        <div class="form-group">
+                          <label for="q-ans-b">Option B</label>
+                          <input type="text" id="q-ans-b" class="border-green" placeholder="Deuxième réponse">
+                        </div>
+                        <div class="form-group">
+                          <label for="q-ans-c">Option C</label>
+                          <input type="text" id="q-ans-c" class="border-blue" placeholder="Troisième réponse">
+                        </div>
+                        <div class="form-group">
+                          <label for="q-ans-d">Option D</label>
+                          <input type="text" id="q-ans-d" class="border-yellow" placeholder="Quatrième réponse">
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label for="q-correct-qcm">Bonne réponse</label>
+                        <select id="q-correct-qcm" class="form-select">
+                          <option value="A">Porte A</option>
+                          <option value="B">Porte B</option>
+                          <option value="C">Porte C</option>
+                          <option value="D">Porte D</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Vrai/Faux Fields -->
+                    <div id="fields-tf" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label for="q-correct-tf">Réponse Correcte</label>
+                        <select id="q-correct-tf" class="form-select">
+                          <option value="VRAI">VRAI</option>
+                          <option value="FAUX">FAUX</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Réponse Courte Fields -->
+                    <div id="fields-short_answer" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label for="q-correct-short">Réponse attendue (exacte ou mots clés)</label>
+                        <input type="text" id="q-correct-short" placeholder="Entrez la réponse textuelle correcte">
+                        <span class="input-help">L'élève devra saisir exactement cette réponse (non sensible à la casse).</span>
+                      </div>
+                    </div>
+
+                    <!-- Glisser-Déposer sur Texte Fields -->
+                    <div id="fields-dragdrop_text" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label for="q-ddt-choices">Mots à faire glisser (Séparés par des virgules)</label>
+                        <input type="text" id="q-ddt-choices" placeholder="ex: Paris, Rabat, Alger, Londres">
+                      </div>
+                      <div class="form-group">
+                        <label for="q-ddt-correct">Mots corrects pour chaque slot dans l'ordre (Séparés par des virgules)</label>
+                        <input type="text" id="q-ddt-correct" placeholder="ex: Paris, Rabat">
+                        <span class="input-help">Insérez des trous dans l'énoncé ci-dessus avec {slot0}, {slot1}, etc.</span>
+                      </div>
+                    </div>
+
+                    <!-- Glisser-Déposer sur Image Fields -->
+                    <div id="fields-dragdrop_image" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label for="q-ddi-image">Image de fond (Modèle prédéfini ou URL)</label>
+                        <select id="q-ddi-image" class="form-select">
+                          <option value="carte_france">Carte de France (Géographie)</option>
+                          <option value="squelette">Squelette humain (Biologie)</option>
+                          <option value="systeme_solaire">Système Solaire (Sciences)</option>
+                          <option value="custom">URL d'image personnalisée</option>
+                        </select>
+                      </div>
+                      <div id="q-ddi-custom-url-group" class="form-group hidden">
+                        <label for="q-ddi-custom-url">URL de l'image personnalisée</label>
+                        <input type="url" id="q-ddi-custom-url" placeholder="https://example.com/image.jpg">
+                      </div>
+                      <div class="form-group">
+                        <label for="q-ddi-labels">Étiquettes textuelles à faire glisser (séparées par des virgules)</label>
+                        <input type="text" id="q-ddi-labels" placeholder="ex: Tête, Thorax, Abdomen">
+                      </div>
+                      <div class="form-group">
+                        <label>Configuration des Cibles (Coordonnées X%, Y% sur l'image et étiquette correcte)</label>
+                        <div id="ddi-targets-list" class="image-targets-config">
+                          <!-- Liste dynamique des cibles -->
+                        </div>
+                        <button type="button" id="btn-add-ddi-target" class="btn btn-secondary btn-sm" style="margin-top:8px;">➕ Ajouter une cible de dépôt</button>
+                      </div>
+                    </div>
+
+                    <!-- Appariement Fields -->
+                    <div id="fields-matching" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label>Configuration des paires à associer (Liste Gauche &harr; Liste Droite)</label>
+                        <div id="matching-pairs-list" class="matching-pairs-config">
+                          <!-- Liste dynamique de paires -->
+                        </div>
+                        <button type="button" id="btn-add-matching-pair" class="btn btn-secondary btn-sm" style="margin-top:8px;">➕ Ajouter une paire d'association</button>
+                      </div>
+                    </div>
+
+                    <!-- Réponses Manquantes (Dropdowns) Fields -->
+                    <div id="fields-missing_words" class="q-type-fields hidden">
+                      <div class="form-group">
+                        <label>Listes d'options pour chaque menu déroulant (insérez {select0}, {select1} dans l'énoncé)</label>
+                        <div id="missing-words-list" class="missing-words-config">
+                          <!-- Liste dynamique d'options de select -->
+                        </div>
+                        <button type="button" id="btn-add-mw-select" class="btn btn-secondary btn-sm" style="margin-top:8px;">➕ Ajouter un menu déroulant</button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div class="form-group">
+                    <label for="q-explanation">Explication pédagogique (Affichée après validation)</label>
+                    <textarea id="q-explanation" rows="2" placeholder="Ex: Rappelez-vous que..."></textarea>
+                  </div>
+
+                  <div class="question-actions">
+                    <button type="submit" id="btn-save-question" class="btn btn-success">🔨 Forger la Question</button>
+                    <button type="button" id="btn-reset-question" class="btn btn-secondary">Réinitialiser</button>
+                  </div>
+                  <div id="q-feedback" class="feedback-msg"></div>
+                </form>
               </div>
             </div>
-            
-            <div class="input-group">
-              <label>L'Énigme du Boss</label>
-              <textarea id="q-text" placeholder="Posez l'énigme ici..." rows="2" required></textarea>
-            </div>
-            
-            <div class="answers-grid">
-              <input type="text" id="q-ans-a" placeholder="A:" required class="ans-a">
-              <input type="text" id="q-ans-b" placeholder="B:" required class="ans-b">
-              <input type="text" id="q-ans-c" placeholder="C:" required class="ans-c">
-              <input type="text" id="q-ans-d" placeholder="D:" required class="ans-d">
-            </div>
-            
-            <div class="form-row bottom-row">
-              <div class="input-group">
-                <label>La Vérité</label>
-                <select id="q-correct" required>
-                  <option value="" disabled selected>Choix...</option>
-                  <option value="A">Porte A</option>
-                  <option value="B">Porte B</option>
-                  <option value="C">Porte C</option>
-                  <option value="D">Porte D</option>
-                </select>
+
+            <!-- Import Card -->
+            <div class="card" style="margin-top:20px;">
+              <div class="card-header">
+                <h3>📥 Importation Rapide (CSV / Grimoires)</h3>
               </div>
-              <div class="input-group flex-2">
-                <label>Révélation (Si échec)</label>
-                <textarea id="q-exp" placeholder="Explication secrète..." rows="1"></textarea>
+              <div class="card-body">
+                <div class="import-actions">
+                  <div class="form-group">
+                    <label for="csv-file">Fichier CSV de questions</label>
+                    <input type="file" id="csv-file" accept=".csv">
+                  </div>
+                  <button id="btn-do-import" class="btn btn-secondary">Lancer l'importation CSV</button>
+                  <div id="import-feedback" class="feedback-msg"></div>
+                </div>
               </div>
             </div>
-            
-            <div class="action-row">
-              <button type="submit" class="arcade-btn">FORGER L'ÉPREUVE</button>
-              <div id="q-feedback" class="feedback-msg"></div>
+          </div>
+
+          <!-- Colonne droite: Bibliothèque des Questions -->
+          <div class="col-list">
+            <div class="card">
+              <div class="card-header">
+                <h3>📚 Bibliothèque des Épreuves (<span id="q-count">0</span>)</h3>
+              </div>
+              <div class="card-body scrollable">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Énoncé</th>
+                      <th>Type</th>
+                      <th>Chapitre</th>
+                      <th>Niveau Bloom</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="questions-list-body">
+                    <tr><td colspan="5" class="text-center">Aucune question dans cette classe.</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Registre des Héros (Moodle Grades-like) -->
+      <section id="panel-results" class="tab-panel hidden">
+        <div class="toolbar">
+          <button id="btn-export" class="btn btn-secondary">📥 Exporter le Rapport Complet (JSON)</button>
         </div>
 
-        <!-- Section: Liste des Questions (Bibliothèque) -->
-        <div id="questions-list-container" class="hidden" style="margin-top:20px;">
-          <div class="table-wrapper">
-            <table class="rpg-table" id="all-questions-table">
+        <div class="card">
+          <div class="card-header">
+            <h3>📜 Registre de Performance des Élèves</h3>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Énigme</th>
-                  <th>Sujet</th>
-                  <th>Bloom</th>
-                  <th>Action</th>
+                  <th>Nom de l'Élève</th>
+                  <th>XP de la Session</th>
+                  <th>Niveau Actuel</th>
+                  <th>Statut dans la classe</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="results-students-body">
                 <!-- Rempli par JS -->
               </tbody>
             </table>

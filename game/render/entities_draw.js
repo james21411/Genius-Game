@@ -197,12 +197,20 @@ export function makeEntitiesDraw({ ctx, assetsReady, assets, world, player, getC
         ctx.scale(-1, 1);
       }
 
+      // Blink animation if player is invulnerable
+      if (player.invulnerable > 0) {
+        ctx.globalAlpha = Math.floor(performance.now() / 100) % 2 === 0 ? 0.3 : 1.0;
+      }
+
       // Dessiner avec le pivot en bas au centre
       ctx.drawImage(
         assets.player,
         sx, sy, sw, sh,
         -drawW / 2, -drawH, drawW, drawH
       );
+      
+      // Reset alpha
+      ctx.globalAlpha = 1.0;
 
       ctx.restore();
     } else {

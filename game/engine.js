@@ -8,7 +8,7 @@ import { input } from './controls.js';
 import { assetsReady } from './assets.js';
 import { draw } from './render.js';
 import { isQuizActive, timeScale, updateQuiz, triggerQuiz } from './quiz_engine.js';
-import { playJump, playCollect, startMusic, pauseMusic, stopMusic } from './sound.js';
+import { playJump, playCollect, playLose, startMusic, pauseMusic, stopMusic } from './sound.js';
 
 const GRAVITY = 2200;
 const MOVE_ACC = 2600;
@@ -168,6 +168,8 @@ function loop(now){
   if(player.y > world.height + 600){
     // fall now costs a life
     player.lives = Math.max(0, player.lives - 1);
+    playLose();
+    floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE'});
     if(player.lives <= 0){
       window.gameState = 'gameover';
     } else {
@@ -342,8 +344,12 @@ function loop(now){
         if (e.type === 'saw' || e.type === 'spike_head' || e.type === 'fire') {
             player.lives = Math.max(0, player.lives - 1);
             player.coins = Math.max(0, (player.coins || 0) - 5);
+            playLose();
+            floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE / -5 🪙'});
         } else {
             player.lives = Math.max(0, player.lives - 1);
+            playLose();
+            floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE'});
         }
         player.invulnerable = 1.2;
         player.vy = -JUMP_V*0.4;
@@ -393,6 +399,8 @@ function loop(now){
       if(rectsOverlap(pb, pbox)){
         // harmful projectile: reduce one life, give brief invulnerability and knockback.
         player.lives = Math.max(0, player.lives - 1);
+        playLose();
+        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE'});
         player.invulnerable = 1.2;
         player.vy = -JUMP_V * 0.4;
         // small horizontal nudge away from projectile source
@@ -453,6 +461,8 @@ function loop(now){
                   // Mauvaise réponse : en mode leçon on ne perd pas de vie !
                   if (window.gameMode !== 'lesson') {
                     player.lives = Math.max(0, player.lives - 1);
+                    playLose();
+                    floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE'});
                   }
                   player.invulnerable = 1.2;
                   player.vy = -JUMP_V * 0.4;
