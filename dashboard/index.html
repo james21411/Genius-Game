@@ -60,6 +60,7 @@
   <div id="game-app" class="dashboard-container hidden">
 
     <aside class="sidebar">
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Reduire le menu" aria-expanded="true" title="Reduire le menu">&lt;</button>
       <div class="sidebar-brand">
         <div class="brand-mark">GJ</div>
         <div class="brand-details">
@@ -225,6 +226,106 @@
               </thead>
               <tbody id="lessons-list-body"></tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="lesson-workbench">
+          <div class="questions-toolbar">
+            <h3 class="questions-toolbar-title">Fragments de lecon</h3>
+            <button type="button" id="btn-open-lesson-ai-modal" class="btn btn-ai">Generer une lecon</button>
+            <span class="questions-toolbar-spacer"></span>
+          </div>
+          <div class="questions-layout lesson-fragment-layout">
+            <div class="col-form">
+              <div class="card">
+                <div class="card-header"><h3>Ajouter un fragment</h3></div>
+                <div class="card-body">
+                  <form id="lesson-fragment-form">
+                    <div class="form-group">
+                      <label for="lf-world">Lecon cible</label>
+                      <select id="lf-world" class="form-select" required></select>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group flex-1">
+                        <label for="lf-order">Ordre</label>
+                        <input type="number" id="lf-order" min="1" value="1">
+                      </div>
+                      <div class="form-group flex-1">
+                        <label for="lf-bloom">Niveau Bloom</label>
+                        <select id="lf-bloom" class="form-select">
+                          <option value="knowledge">Memorisation</option>
+                          <option value="comprehension" selected>Comprehension</option>
+                          <option value="application">Application</option>
+                          <option value="analysis">Analyse</option>
+                          <option value="evaluation">Evaluation</option>
+                          <option value="creation">Creation</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label for="lf-title">Titre du paragraphe</label>
+                      <input type="text" id="lf-title" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="lf-content">Paragraphe</label>
+                      <textarea id="lf-content" rows="5" required></textarea>
+                    </div>
+                    <div class="form-group">
+                      <label for="lf-image">Image du paragraphe</label>
+                      <input type="file" id="lf-image" accept="image/*">
+                      <div id="lf-image-preview" class="lesson-image-preview hidden"></div>
+                    </div>
+                    <div class="type-container">
+                      <h4 class="ai-section-title">Question de verification</h4>
+                      <div class="form-group">
+                        <label for="lf-question">Enonce</label>
+                        <textarea id="lf-question" rows="2" required></textarea>
+                      </div>
+                      <div class="answers-grid">
+                        <div class="form-group"><label for="lf-a">A</label><input type="text" id="lf-a" required></div>
+                        <div class="form-group"><label for="lf-b">B</label><input type="text" id="lf-b" required></div>
+                        <div class="form-group"><label for="lf-c">C</label><input type="text" id="lf-c" required></div>
+                        <div class="form-group"><label for="lf-d">D</label><input type="text" id="lf-d" required></div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group flex-1">
+                          <label for="lf-correct">Bonne reponse</label>
+                          <select id="lf-correct" class="form-select">
+                            <option value="A">A</option><option value="B">B</option>
+                            <option value="C">C</option><option value="D">D</option>
+                          </select>
+                        </div>
+                        <div class="form-group flex-1">
+                          <label for="lf-time">Temps</label>
+                          <input type="number" id="lf-time" value="20" min="10" max="120">
+                        </div>
+                        <div class="form-group flex-1">
+                          <label for="lf-xp">XP</label>
+                          <input type="number" id="lf-xp" value="50" min="10" max="300">
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label for="lf-explanation">Explication</label>
+                        <textarea id="lf-explanation" rows="2"></textarea>
+                      </div>
+                    </div>
+                    <div class="question-actions">
+                      <button type="submit" class="btn btn-success">Ajouter le fragment</button>
+                      <button type="button" id="btn-reset-lesson-fragment" class="btn btn-secondary">Reinitialiser</button>
+                    </div>
+                    <div id="lf-feedback" class="feedback-msg"></div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="col-list">
+              <div class="card">
+                <div class="card-header"><h3>Parcours (<span id="lf-count">0</span>)</h3></div>
+                <div class="card-body scrollable">
+                  <div id="lesson-fragments-list" class="lesson-fragments-list"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -501,6 +602,66 @@
             </div>
             <div id="ai-preview-list" class="ai-preview-list"></div>
             <div id="ai-import-feedback" class="ai-feedback"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="lesson-ai-modal" class="modal ai-gen-modal hidden">
+        <div class="ai-gen-modal-content">
+          <div class="ai-gen-modal-header">
+            <h2>Atelier de generation de lecon</h2>
+            <button type="button" id="btn-close-lesson-ai-modal" class="ai-modal-close" aria-label="Fermer">&times;</button>
+          </div>
+
+          <div id="lesson-ai-loading" class="ai-gen-loading hidden">
+            <div class="ai-spinner"></div>
+            <p>Gemini fragmente la lecon et prépare les questions de verification.</p>
+          </div>
+
+          <div id="lesson-ai-config" class="ai-gen-config">
+            <div class="ai-gen-columns">
+              <div class="ai-gen-left">
+                <div class="form-group">
+                  <label for="lesson-ai-world">Lecon cible</label>
+                  <select id="lesson-ai-world" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label for="lesson-ai-context">Contenu de base</label>
+                  <textarea id="lesson-ai-context" rows="8" placeholder="Collez ici le cours ou les notions a transformer en fragments..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="lesson-ai-file">Importer un support (PDF / TXT)</label>
+                  <input type="file" id="lesson-ai-file" class="ai-file-input" accept=".pdf,.txt">
+                </div>
+                <div class="form-group">
+                  <label for="lesson-ai-instructions">Consignes supplementaires</label>
+                  <textarea id="lesson-ai-instructions" rows="3" placeholder="Ex: niveau CM2, phrases simples, exemples concrets..."></textarea>
+                </div>
+              </div>
+
+              <div class="ai-gen-right">
+                <div class="form-group">
+                  <label for="lesson-ai-count">Nombre de fragments</label>
+                  <input type="number" id="lesson-ai-count" min="1" max="20" value="4">
+                </div>
+                <h4 class="ai-section-title">Niveaux Bloom (taxonomie)</h4>
+                <div id="lesson-ai-bloom-checks" class="ai-bloom-grid"></div>
+                <button type="button" id="btn-lesson-ai-generate" class="btn btn-ai btn-block">Generer les fragments</button>
+                <div id="lesson-ai-feedback" class="ai-feedback"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="lesson-ai-preview-section" class="ai-preview-section hidden">
+            <div class="ai-preview-header">
+              <h3>Previsualisation — <span id="lesson-ai-preview-count">0</span> fragment(s)</h3>
+              <div class="ai-preview-actions">
+                <button type="button" id="btn-lesson-ai-back" class="btn btn-secondary">Reconfigurer</button>
+                <button type="button" id="btn-lesson-ai-import" class="btn btn-success">Charger dans la lecon</button>
+              </div>
+            </div>
+            <div id="lesson-ai-preview-list" class="ai-preview-list"></div>
+            <div id="lesson-ai-import-feedback" class="ai-feedback"></div>
           </div>
         </div>
       </div>

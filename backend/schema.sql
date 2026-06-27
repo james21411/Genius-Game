@@ -63,9 +63,26 @@ CREATE TABLE IF NOT EXISTS questions (
     difficulty     INTEGER DEFAULT 1,
     points         INTEGER DEFAULT 1,
     extra_data     TEXT,
+    lesson_fragment_id INTEGER,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (world_id) REFERENCES worlds(id)  ON DELETE SET NULL,
     FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS lesson_fragments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id    INTEGER NOT NULL,
+    class_id    INTEGER NOT NULL,
+    order_index INTEGER DEFAULT 1,
+    title       TEXT,
+    content     TEXT    NOT NULL,
+    image_data  TEXT,
+    bloom_level TEXT    DEFAULT 'comprehension',
+    question_id INTEGER,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -128,3 +145,4 @@ CREATE INDEX IF NOT EXISTS idx_sessions_student ON sessions(student_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_class   ON sessions(class_id);
 CREATE INDEX IF NOT EXISTS idx_questions_world  ON questions(world_id);
 CREATE INDEX IF NOT EXISTS idx_students_class   ON students(class_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_fragments_world ON lesson_fragments(world_id);

@@ -130,3 +130,55 @@ Chaque objet JSON DOIT avoir exactement les clés suivantes :
 
     instructions = type_specific_instructions.get(question_type, type_specific_instructions["qcm"])
     return base_instructions + "\n" + instructions
+
+
+def get_lesson_fragments_prompt(context_text, num_fragments, bloom_levels, extra_instructions=""):
+    """
+    Retourne un prompt pour générer des fragments de leçon jouables.
+    Chaque fragment contient un paragraphe pédagogique et une question QCM de vérification.
+    """
+    if isinstance(bloom_levels, list):
+        bloom_instruction = (
+            f"- Niveaux Bloom autorisés : {', '.join(bloom_levels)}. "
+            "Pour chaque fragment, choisis le niveau Bloom le plus adapté parmi cette liste."
+        )
+    else:
+        bloom_instruction = f"- Niveau Bloom ciblé : {bloom_levels}"
+
+    extra_block = ""
+    if extra_instructions and extra_instructions.strip():
+        extra_block = f"\nInstructions complémentaires de l'enseignant :\n{extra_instructions.strip()}\n"
+
+    return f"""
+Tu es un expert pédagogique et concepteur de leçons interactives pour Genius Jump EDU.
+Génère exactement {num_fragments} fragments de leçon à partir du support suivant :
+\"\"\"{context_text}\"\"\"
+
+Paramètres :
+{bloom_instruction}
+{extra_block}
+
+Chaque fragment sera affiché à l'élève après avoir sauté sur une plateforme.
+Le contenu doit être progressif : un paragraphe clair, court, utile, puis une question de vérification.
+La question doit vérifier que l'apprenant a lu et compris le fragment.
+
+Réponds EXCLUSIVEMENT avec un tableau JSON valide. Ne mets pas de texte avant ou après le JSON.
+
+Chaque objet JSON DOIT avoir exactement les clés suivantes :
+- "title" (string) : titre court du fragment
+- "content" (string) : un paragraphe pédagogique de 45 à 90 mots maximum
+- "image_prompt" (string) : description courte d'une image utile à associer au fragment, ou "" si inutile
+- "bloom_level" (string) : niveau Bloom utilisé
+- "question" (object) avec exactement :
+  - "type" (string) : toujours "qcm"
+  - "question" (string) : question de vérification
+  - "answer_a" (string)
+  - "answer_b" (string)
+  - "answer_c" (string)
+  - "answer_d" (string)
+  - "correct_answer" (string) : "A", "B", "C" ou "D"
+  - "explanation" (string) : explication courte après réponse
+  - "points" (integer) : entre 1 et 5
+  - "time_limit" (integer) : entre 15 et 45
+  - "xp_reward" (integer) : entre 30 et 120
+"""

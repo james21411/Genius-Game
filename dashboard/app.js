@@ -29,6 +29,9 @@ const BLOOM_LEVELS = [
 let aiModalInitialized = false;
 let aiChatHistory = [];
 let aiGeneratedPreview = [];
+let lessonAiInitialized = false;
+let lessonAiPreview = [];
+let lessonFragmentImageData = '';
 
 // --- DOM Elements ---
 const authOverlay = document.getElementById('auth-overlay');
@@ -67,12 +70,47 @@ async function showApp() {
   initSidebar();
   initQuestionBuilder();
   initAiGeneratorModal();
+  initLessonFragments();
+  initLessonAiModal();
   await fetchClasses();
 }
 
 // --- Tab switcher ---
 function initSidebar() {
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebarCollapsed = localStorage.getItem('teacher_sidebar_collapsed') === '1';
+  const updateSidebarToggle = (collapsed) => {
+    if (!sidebarToggle) return;
+    sidebarToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    sidebarToggle.setAttribute('aria-label', collapsed ? 'Agrandir le menu' : 'Reduire le menu');
+    sidebarToggle.title = collapsed ? 'Agrandir le menu' : 'Reduire le menu';
+    sidebarToggle.textContent = collapsed ? '>' : '<';
+  };
+  gameApp.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  updateSidebarToggle(sidebarCollapsed);
+
+  if (sidebarToggle && !sidebarToggle.dataset.ready) {
+    sidebarToggle.dataset.ready = '1';
+    sidebarToggle.addEventListener('click', () => {
+      const collapsed = !gameApp.classList.contains('sidebar-collapsed');
+      gameApp.classList.toggle('sidebar-collapsed', collapsed);
+      updateSidebarToggle(collapsed);
+      localStorage.setItem('teacher_sidebar_collapsed', collapsed ? '1' : '0');
+    });
+  }
+
   document.querySelectorAll('.menu-item').forEach(item => {
+    const shortLabels = {
+      dashboard: 'TB',
+      classes: 'CL',
+      lessons: 'LE',
+      evaluations: 'EV',
+      questions: 'Q',
+      results: 'R'
+    };
+    item.dataset.short = shortLabels[item.dataset.tab] || item.textContent.trim().slice(0, 2).toUpperCase();
+    if (item.dataset.ready) return;
+    item.dataset.ready = '1';
     item.addEventListener('click', (e) => {
       e.preventDefault();
       const tab = item.dataset.tab;
@@ -94,6 +132,7 @@ function initSidebar() {
         fetchClassesList();
       } else if (tab === 'lessons') {
         fetchWorldsList('lesson');
+        fetchLessonWorldDropdowns();
       } else if (tab === 'evaluations') {
         fetchWorldsList('eval');
       } else if (tab === 'questions') {
@@ -185,7 +224,7 @@ async function fetchClasses() {
       updateClassDisplay();
       if (activeTab === 'dashboard') fetchStats();
       else if (activeTab === 'classes') fetchClassesList();
-      else if (activeTab === 'lessons') fetchWorldsList('lesson');
+      else if (activeTab === 'lessons') { fetchWorldsList('lesson'); fetchLessonWorldDropdowns(); }
       else if (activeTab === 'evaluations') fetchWorldsList('eval');
       else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
     } else {
@@ -201,7 +240,7 @@ classSelect.onchange = (e) => {
   
   if (activeTab === 'dashboard') fetchStats();
   else if (activeTab === 'classes') fetchClassesList();
-  else if (activeTab === 'lessons') fetchWorldsList('lesson');
+  else if (activeTab === 'lessons') { fetchWorldsList('lesson'); fetchLessonWorldDropdowns(); }
   else if (activeTab === 'evaluations') fetchWorldsList('eval');
   else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
   else if (activeTab === 'results') fetchStats();
@@ -398,6 +437,299 @@ window.deleteWorld = async (id) => {
     }
   } catch (err) { console.error(err); }
 };
+
+// --- Lesson Fragments ---
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function buildBloomChecks(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = BLOOM_LEVELS.map((b, i) => `
+    <label class="ai-bloom-check">
+      <input type="checkbox" value="${b.key}" class="${containerId}-input" ${i < 4 ? 'checked' : ''}>
+      <span>${b.label}</span>
+    </label>
+  `).join('');
+}
+
+async function fetchLessonWorldDropdowns() {
+  if (!currentClassId) return;
+  try {
+    const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
+    const worlds = await res.json();
+    const lessons = worlds.filter(w => w.mode === 'lesson');
+    const options = lessons.map(w => `<option value="${w.id}" data-subject="${escapeHtml(w.subject)}" data-topic="${escapeHtml(w.topic)}">${escapeHtml(w.name)} — ${escapeHtml(w.topic)}</option>`).join('');
+    ['lf-world', 'lesson-ai-world'].forEach(id => {
+      const select = document.getElementById(id);
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = options || '<option value="">Creez une lecon d\'abord</option>';
+      if ([...select.options].some(o => o.value === previous)) select.value = previous;
+    });
+    await fetchLessonFragments();
+  } catch (err) { console.error(err); }
+}
+
+async function fetchLessonFragments() {
+  const worldId = document.getElementById('lf-world')?.value;
+  if (!worldId) {
+    const list = document.getElementById('lesson-fragments-list');
+    if (list) list.innerHTML = '<p class="text-center">Selectionnez ou creez une lecon.</p>';
+    const count = document.getElementById('lf-count');
+    if (count) count.textContent = '0';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/worlds/${worldId}/lesson-fragments`);
+    const fragments = await res.json();
+    const count = document.getElementById('lf-count');
+    if (count) count.textContent = fragments.length;
+    const list = document.getElementById('lesson-fragments-list');
+    if (!list) return;
+    list.innerHTML = fragments.map(f => `
+      <article class="lesson-fragment-card">
+        ${f.image_data ? `<div class="lesson-fragment-thumb">${f.image_data.startsWith('data:image') ? `<img src="${f.image_data}" alt="">` : escapeHtml(f.image_data)}</div>` : ''}
+        <div class="lesson-fragment-main">
+          <div class="lesson-fragment-meta">Fragment ${f.order_index} • ${escapeHtml(f.bloom_level)}</div>
+          <h4>${escapeHtml(f.title)}</h4>
+          <p>${escapeHtml(f.content)}</p>
+          <strong>Test :</strong> ${escapeHtml(f.check_question?.question || '')}
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="deleteLessonFragment(${f.id})">Suppr.</button>
+      </article>
+    `).join('') || '<p class="text-center">Aucun fragment pour cette lecon.</p>';
+  } catch (err) { console.error(err); }
+}
+
+function resetLessonFragmentForm() {
+  ['lf-title', 'lf-content', 'lf-question', 'lf-a', 'lf-b', 'lf-c', 'lf-d', 'lf-explanation'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('lf-order').value = '1';
+  document.getElementById('lf-bloom').value = 'comprehension';
+  document.getElementById('lf-correct').value = 'A';
+  document.getElementById('lf-time').value = '20';
+  document.getElementById('lf-xp').value = '50';
+  document.getElementById('lf-image').value = '';
+  document.getElementById('lf-image-preview')?.classList.add('hidden');
+  lessonFragmentImageData = '';
+}
+
+function initLessonFragments() {
+  const form = document.getElementById('lesson-fragment-form');
+  if (!form || form.dataset.ready) return;
+  form.dataset.ready = '1';
+
+  document.getElementById('lf-world')?.addEventListener('change', fetchLessonFragments);
+  document.getElementById('btn-reset-lesson-fragment')?.addEventListener('click', resetLessonFragmentForm);
+  document.getElementById('lf-image')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    const preview = document.getElementById('lf-image-preview');
+    lessonFragmentImageData = '';
+    if (!file) {
+      preview?.classList.add('hidden');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      lessonFragmentImageData = reader.result;
+      if (preview) {
+        preview.innerHTML = `<img src="${lessonFragmentImageData}" alt="">`;
+        preview.classList.remove('hidden');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const worldSelect = document.getElementById('lf-world');
+    const worldId = worldSelect.value;
+    if (!worldId) return alert('Creez ou selectionnez une lecon.');
+
+    const payload = {
+      class_id: parseInt(currentClassId),
+      world_id: parseInt(worldId),
+      subject: worldSelect.selectedOptions[0]?.dataset.subject || 'Lecon',
+      topic: worldSelect.selectedOptions[0]?.dataset.topic || document.getElementById('lf-title').value,
+      order_index: parseInt(document.getElementById('lf-order').value) || 1,
+      title: document.getElementById('lf-title').value,
+      content: document.getElementById('lf-content').value,
+      image_data: lessonFragmentImageData,
+      bloom_level: document.getElementById('lf-bloom').value,
+      question: {
+        type: 'qcm',
+        question: document.getElementById('lf-question').value,
+        answer_a: document.getElementById('lf-a').value,
+        answer_b: document.getElementById('lf-b').value,
+        answer_c: document.getElementById('lf-c').value,
+        answer_d: document.getElementById('lf-d').value,
+        correct_answer: document.getElementById('lf-correct').value,
+        explanation: document.getElementById('lf-explanation').value,
+        points: 1,
+        time_limit: parseInt(document.getElementById('lf-time').value) || 20,
+        xp_reward: parseInt(document.getElementById('lf-xp').value) || 50,
+      }
+    };
+
+    const feedback = document.getElementById('lf-feedback');
+    feedback.textContent = 'Enregistrement du fragment...';
+    try {
+      const res = await fetch(`${API}/lesson-fragments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Erreur de validation');
+      feedback.textContent = 'Fragment ajoute.';
+      feedback.className = 'feedback-msg feedback-success';
+      resetLessonFragmentForm();
+      await fetchLessonFragments();
+    } catch (err) {
+      feedback.textContent = 'Erreur lors de l\'enregistrement.';
+      feedback.className = 'feedback-msg feedback-error';
+    }
+  });
+}
+
+window.deleteLessonFragment = async (id) => {
+  if (!confirm('Supprimer ce fragment et sa question de verification ?')) return;
+  try {
+    const res = await fetch(`${API}/lesson-fragments/${id}`, { method: 'DELETE' });
+    if (res.ok) await fetchLessonFragments();
+  } catch (err) { console.error(err); }
+};
+
+function initLessonAiModal() {
+  if (lessonAiInitialized) return;
+  lessonAiInitialized = true;
+  buildBloomChecks('lesson-ai-bloom-checks');
+
+  document.getElementById('btn-open-lesson-ai-modal')?.addEventListener('click', async () => {
+    await fetchLessonWorldDropdowns();
+    showLessonAiConfig();
+    document.getElementById('lesson-ai-modal')?.classList.remove('hidden');
+  });
+  document.getElementById('btn-close-lesson-ai-modal')?.addEventListener('click', () => {
+    document.getElementById('lesson-ai-modal')?.classList.add('hidden');
+  });
+  document.getElementById('btn-lesson-ai-back')?.addEventListener('click', showLessonAiConfig);
+  document.getElementById('btn-lesson-ai-generate')?.addEventListener('click', generateLessonFragmentsPreview);
+  document.getElementById('btn-lesson-ai-import')?.addEventListener('click', importLessonFragmentsPreview);
+}
+
+function showLessonAiConfig() {
+  document.getElementById('lesson-ai-config')?.classList.remove('hidden');
+  document.getElementById('lesson-ai-preview-section')?.classList.add('hidden');
+  document.getElementById('lesson-ai-loading')?.classList.add('hidden');
+}
+
+function getLessonAiBloomLevels() {
+  return [...document.querySelectorAll('#lesson-ai-bloom-checks input:checked')].map(el => el.value);
+}
+
+function renderLessonAiPreview() {
+  const list = document.getElementById('lesson-ai-preview-list');
+  const count = document.getElementById('lesson-ai-preview-count');
+  if (count) count.textContent = lessonAiPreview.length;
+  if (!list) return;
+  list.innerHTML = lessonAiPreview.map((f, idx) => `
+    <article class="ai-preview-card lesson-preview-card">
+      <div class="ai-preview-badge">Fragment ${idx + 1} • ${escapeHtml(f.bloom_level || 'comprehension')}</div>
+      <h4>${escapeHtml(f.title || `Fragment ${idx + 1}`)}</h4>
+      <p>${escapeHtml(f.content || '')}</p>
+      ${f.image_data ? `<div class="lesson-image-suggestion">${escapeHtml(f.image_data)}</div>` : ''}
+      <div class="ai-preview-answers">
+        <strong>Question :</strong> ${escapeHtml(f.question?.question || '')}<br>
+        A. ${escapeHtml(f.question?.answer_a || '')}<br>
+        B. ${escapeHtml(f.question?.answer_b || '')}<br>
+        C. ${escapeHtml(f.question?.answer_c || '')}<br>
+        D. ${escapeHtml(f.question?.answer_d || '')}<br>
+        <strong>Bonne reponse :</strong> ${escapeHtml(f.question?.correct_answer || 'A')}
+      </div>
+    </article>
+  `).join('');
+}
+
+async function generateLessonFragmentsPreview() {
+  const worldId = document.getElementById('lesson-ai-world')?.value;
+  const context = document.getElementById('lesson-ai-context')?.value.trim();
+  const file = document.getElementById('lesson-ai-file')?.files?.[0];
+  const feedback = document.getElementById('lesson-ai-feedback');
+  if (!worldId) {
+    feedback.textContent = 'Selectionnez une lecon cible.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+  if (!context && !file) {
+    feedback.textContent = 'Ajoutez un contenu ou un support.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('context', context || '');
+  formData.append('num_fragments', document.getElementById('lesson-ai-count')?.value || '4');
+  formData.append('bloom_levels', JSON.stringify(getLessonAiBloomLevels()));
+  formData.append('chat_context', document.getElementById('lesson-ai-instructions')?.value || '');
+  if (file) formData.append('file', file);
+
+  document.getElementById('lesson-ai-loading')?.classList.remove('hidden');
+  feedback.textContent = '';
+  try {
+    const res = await fetch(`${API}/ai/lesson-generate-preview`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Generation impossible');
+    lessonAiPreview = data.fragments || [];
+    renderLessonAiPreview();
+    document.getElementById('lesson-ai-config')?.classList.add('hidden');
+    document.getElementById('lesson-ai-preview-section')?.classList.remove('hidden');
+  } catch (err) {
+    feedback.textContent = err.message;
+    feedback.className = 'ai-feedback ai-feedback-error';
+  } finally {
+    document.getElementById('lesson-ai-loading')?.classList.add('hidden');
+  }
+}
+
+async function importLessonFragmentsPreview() {
+  const select = document.getElementById('lesson-ai-world');
+  const worldId = select?.value;
+  const feedback = document.getElementById('lesson-ai-import-feedback');
+  if (!worldId || !lessonAiPreview.length) return;
+  const payload = {
+    class_id: parseInt(currentClassId),
+    world_id: parseInt(worldId),
+    subject: select.selectedOptions[0]?.dataset.subject || 'Lecon',
+    topic: select.selectedOptions[0]?.dataset.topic || 'Lecon',
+    fragments: lessonAiPreview
+  };
+  feedback.textContent = 'Import des fragments...';
+  try {
+    const res = await fetch(`${API}/lesson-fragments/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Import impossible');
+    feedback.textContent = data.message || 'Fragments importes.';
+    feedback.className = 'ai-feedback ai-feedback-success';
+    document.getElementById('lf-world').value = worldId;
+    await fetchLessonFragments();
+  } catch (err) {
+    feedback.textContent = err.message;
+    feedback.className = 'ai-feedback ai-feedback-error';
+  }
+}
 
 // --- Question Builder / 7 Types ---
 

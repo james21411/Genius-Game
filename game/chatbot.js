@@ -1,6 +1,7 @@
 import { player } from './level.js';
 
 const API_BASE = 'http://localhost:5001/api';
+const CHATBOT_QUERY_COST = 10;
 
 // Historique conversationnel local
 let chatHistory = [];
@@ -26,10 +27,10 @@ export function initChatbot() {
 
   // Update UI displays
   function updateChatbotUI() {
-    queriesCount.textContent = `Questions illimitées`;
+    queriesCount.textContent = `${player.coins || 0} pièces • ${CHATBOT_QUERY_COST} pièces/question`;
   }
 
-  // Masquer le bouton d'achat de requêtes car elles sont illimitées
+  // Les questions se paient directement à l'envoi.
   buyBtn.style.display = 'none';
 
   // Toggle Panel
@@ -89,6 +90,13 @@ export function initChatbot() {
     e.preventDefault();
     const queryText = input.value.trim();
     if (!queryText) return;
+    if ((player.coins || 0) < CHATBOT_QUERY_COST) {
+      updateChatbotUI();
+      addBotMessage(`Il te faut ${CHATBOT_QUERY_COST} pièces pour poser une question. Tu en as ${player.coins || 0}.`);
+      return;
+    }
+
+    player.coins = Math.max(0, (player.coins || 0) - CHATBOT_QUERY_COST);
 
     updateChatbotUI();
 

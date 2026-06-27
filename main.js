@@ -376,7 +376,7 @@ function updateMenuVisibility() {
 
   const quizActive = typeof window.isQuizActive === 'function' ? window.isQuizActive() : false;
   const gameplayVisible = window.gameState === 'playing' && !window.isLivreActive;
-  const inGameLoop = gameplayVisible && !quizActive;
+  const inGameLoop = gameplayVisible;
 
   document.body.classList.toggle('in-gameplay', inGameLoop);
 
@@ -391,9 +391,7 @@ function updateMenuVisibility() {
         chatbotToggle.classList.remove('hidden');
       }
     }
-    if (chatbotPanel && !inGameLoop) chatbotPanel.classList.add('hidden');
     if (bookToggle) bookToggle.style.display = inGameLoop ? '' : 'none';
-    if (bookPanel && !inGameLoop) bookPanel.classList.add('hidden');
   } else {
     menuOverlay.classList.remove('hidden');
     pauseBtn.classList.add('hidden');

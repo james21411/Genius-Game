@@ -2496,3 +2496,207 @@ body {
   background: #eafff8 !important;
   border-color: rgba(85, 207, 179, 0.52) !important;
 }
+
+/* --- QUIZ CALM SUCCESS + COMPACT STUDENT SCREEN --- */
+.login-layout {
+  padding: 8px 14px 14px !important;
+  gap: 14px !important;
+  align-items: stretch;
+}
+
+.login-brand {
+  min-height: calc(100svh - 22px) !important;
+  padding: 24px !important;
+}
+
+.login-card {
+  align-self: stretch !important;
+  justify-content: center !important;
+  padding: 24px !important;
+}
+
+.hub-banner {
+  height: 76px !important;
+}
+
+.hub-header {
+  padding: 12px 24px !important;
+}
+
+.hub-main {
+  gap: 16px !important;
+  padding: 14px 20px 18px !important;
+}
+
+.hub-section {
+  padding: 18px !important;
+}
+
+.activities-grid {
+  gap: 10px !important;
+}
+
+.activity-card {
+  padding: 13px !important;
+}
+
+.character-picker {
+  min-height: 180px !important;
+}
+
+.quiz-panel {
+  isolation: isolate;
+}
+
+#quizFeedback {
+  position: relative;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  text-align: center;
+  color: #2f2450;
+  overflow: hidden;
+}
+
+#quizFeedback strong {
+  display: block;
+  font-size: clamp(1.05rem, 2.2vw, 1.45rem);
+  margin-bottom: 4px;
+}
+
+#quizFeedback p {
+  margin: 0;
+  color: #5d5278;
+  line-height: 1.45;
+}
+
+.quiz-feedback-correct {
+  background:
+    radial-gradient(circle at 18% 30%, rgba(255,255,255,0.72), transparent 22%),
+    linear-gradient(135deg, #fff9e8, #eafff8 48%, #f2ecff);
+  border: 2px solid rgba(85, 207, 179, 0.44);
+  box-shadow:
+    0 8px 0 rgba(85, 207, 179, 0.14),
+    inset 0 2px 0 rgba(255,255,255,0.75);
+  animation: calmAnswerGlow 1.8s ease-in-out infinite alternate;
+}
+
+.quiz-feedback-wrong,
+.quiz-feedback-info {
+  background: linear-gradient(135deg, #fff9e8, #f2ecff);
+  border: 2px solid rgba(167, 139, 250, 0.34);
+}
+
+.quiz-calm-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
+.quiz-calm-burst span {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(85, 207, 179, 0.28), transparent 68%);
+  animation: calmOrbFloat 2.6s ease-in-out infinite;
+}
+
+.quiz-calm-burst span:nth-child(1) { left: 8%; top: 12%; }
+.quiz-calm-burst span:nth-child(2) { right: 14%; top: 4%; animation-delay: 0.45s; background: radial-gradient(circle, rgba(167, 139, 250, 0.24), transparent 68%); }
+.quiz-calm-burst span:nth-child(3) { left: 45%; bottom: -24px; animation-delay: 0.9s; background: radial-gradient(circle, rgba(255, 217, 120, 0.28), transparent 68%); }
+
+.quiz-correct::after {
+  content: "";
+  position: absolute;
+  inset: -18px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(85, 207, 179, 0.28), transparent 18%),
+    radial-gradient(circle at 80% 16%, rgba(167, 139, 250, 0.22), transparent 20%),
+    radial-gradient(circle at 50% 90%, rgba(255, 217, 120, 0.28), transparent 24%);
+  filter: blur(2px);
+  animation: calmPanelAura 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes calmAnswerGlow {
+  from { transform: translateY(0); filter: saturate(1); }
+  to { transform: translateY(-2px); filter: saturate(1.08); }
+}
+
+@keyframes calmOrbFloat {
+  0%, 100% { transform: translateY(8px) scale(0.92); opacity: 0.35; }
+  50% { transform: translateY(-8px) scale(1.08); opacity: 0.75; }
+}
+
+@keyframes calmPanelAura {
+  from { opacity: 0.45; transform: scale(0.98); }
+  to { opacity: 0.85; transform: scale(1.02); }
+}
+
+@media (max-width: 900px) {
+  .login-layout {
+    padding: 6px !important;
+    gap: 8px !important;
+  }
+  .login-brand {
+    min-height: auto !important;
+    padding: 18px !important;
+  }
+  .login-card {
+    padding: 18px !important;
+  }
+  .hub-banner {
+    height: 52px !important;
+  }
+  .hub-main {
+    padding: 10px !important;
+  }
+}
+
+.lesson-fragment-reading {
+  width: 100%;
+}
+
+.lesson-fragment-content {
+  display: grid;
+  gap: 16px;
+}
+
+.lesson-fragment-content p {
+  margin: 0;
+  color: #2f2450;
+  font-size: clamp(1rem, 2vw, 1.22rem);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.lesson-fragment-image,
+.lesson-fragment-image-prompt {
+  width: min(100%, 520px);
+  max-height: 280px;
+  margin: 0 auto;
+  border: 2px solid rgba(200, 146, 55, 0.34);
+  border-radius: 8px;
+  background: #fffdf5;
+  box-shadow: 0 6px 0 rgba(200, 146, 55, 0.16);
+}
+
+.lesson-fragment-image {
+  object-fit: cover;
+  display: block;
+}
+
+.lesson-fragment-image-prompt {
+  padding: 14px;
+  color: #6f4711;
+  font-weight: 700;
+  text-align: center;
+}
+
+.lesson-read-btn {
+  width: min(260px, 100%);
+  margin: 0 auto;
+}

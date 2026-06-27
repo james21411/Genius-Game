@@ -2241,3 +2241,310 @@ body,
 ::-webkit-scrollbar-thumb:hover {
   background: #a78bfa;
 }
+
+/* ─── COLLAPSIBLE SIDEBAR + COMPACT TEACHER CONTENT ────────────────────────── */
+.sidebar {
+  position: relative;
+  flex: 0 0 260px;
+  width: 260px;
+  min-width: 260px;
+  overflow: visible;
+  transition: flex-basis 0.18s ease, width 0.18s ease, min-width 0.18s ease;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 10px;
+  right: -18px;
+  z-index: 5;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid rgba(161, 126, 72, 0.28);
+  background:
+    linear-gradient(180deg, #ffd978, #e9b657 52%, #d39534);
+  color: #34224e;
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow:
+    0 4px 0 rgba(116, 82, 24, 0.22),
+    inset 0 2px 0 rgba(255,255,255,0.72);
+}
+
+.dashboard-container.sidebar-collapsed .sidebar {
+  flex-basis: 76px;
+  width: 76px;
+  min-width: 76px;
+}
+
+.dashboard-container.sidebar-collapsed .brand-details,
+.dashboard-container.sidebar-collapsed .user-info {
+  display: none;
+}
+
+.dashboard-container.sidebar-collapsed .brand-details {
+  width: 0;
+}
+
+.dashboard-container.sidebar-collapsed .sidebar-brand,
+.dashboard-container.sidebar-collapsed .sidebar-user {
+  justify-content: center;
+  padding-left: 10px;
+  padding-right: 10px;
+  gap: 0;
+}
+
+.dashboard-container.sidebar-collapsed .sidebar-menu {
+  align-items: center;
+  padding-left: 8px;
+  padding-right: 8px;
+  overflow-x: hidden;
+}
+
+.dashboard-container.sidebar-collapsed .menu-item {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0;
+  font-size: 0;
+}
+
+.dashboard-container.sidebar-collapsed .menu-item::after {
+  content: attr(data-short);
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: inherit;
+}
+
+.dashboard-container.sidebar-collapsed .btn-logout {
+  width: 34px;
+  height: 30px;
+  margin-left: 0;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.dashboard-container.sidebar-collapsed .sidebar-user {
+  flex-direction: column;
+}
+
+.dashboard-container.sidebar-collapsed .user-avatar {
+  width: 38px;
+  height: 38px;
+}
+
+.content-area {
+  min-width: 0;
+}
+
+.content-header {
+  padding: 12px 20px;
+}
+
+.tab-panel {
+  padding: 16px 18px;
+}
+
+.card {
+  margin-bottom: 14px;
+}
+
+.card-header {
+  padding: 9px 14px;
+}
+
+.card-body {
+  padding: 14px;
+}
+
+.stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.stat-card {
+  padding: 14px;
+  gap: 12px;
+}
+
+.stat-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.stat-details h4 {
+  font-size: 16px;
+}
+
+.stat-details p,
+.data-table td,
+.content-header p,
+.form-group input,
+.form-group textarea,
+.form-group select,
+.form-select {
+  font-size: 0.875rem;
+}
+
+.data-table {
+  table-layout: auto;
+  min-width: 0 !important;
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+.card-body {
+  overflow-x: auto;
+}
+
+.questions-toolbar {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.questions-layout {
+  grid-template-columns: minmax(300px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 14px;
+}
+
+.col-form .card {
+  max-height: calc(100vh - 112px);
+}
+
+.col-list .card-body.scrollable {
+  max-height: calc(100vh - 164px);
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-row,
+.answers-grid,
+.ai-type-counts-grid,
+.ai-bloom-grid {
+  gap: 8px;
+}
+
+.type-container {
+  padding: 12px;
+}
+
+.btn {
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+}
+
+.btn-sm {
+  padding: 5px 8px;
+}
+
+.ai-gen-config,
+.ai-preview-section {
+  padding: 16px;
+}
+
+.ai-gen-columns {
+  grid-template-columns: minmax(320px, 1fr) minmax(280px, 0.82fr);
+  gap: 16px;
+}
+
+.ai-preview-list {
+  max-height: 50vh;
+}
+
+@media (max-width: 1100px) {
+  .questions-layout,
+  .ai-gen-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lesson-workbench {
+  margin-top: 16px;
+}
+
+.lesson-fragment-layout {
+  align-items: start;
+}
+
+.lesson-image-preview,
+.lesson-fragment-thumb {
+  border: 1.5px solid rgba(200, 146, 55, 0.28);
+  border-radius: 8px;
+  background: #fffdf5;
+  overflow: hidden;
+}
+
+.lesson-image-preview {
+  width: 160px;
+  aspect-ratio: 16 / 10;
+  margin-top: 8px;
+}
+
+.lesson-image-preview img,
+.lesson-fragment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lesson-fragments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lesson-fragment-card {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1.5px solid rgba(200, 146, 55, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffdf5, #fff7df);
+}
+
+.lesson-fragment-thumb {
+  width: 92px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  font-size: 0.72rem;
+  color: #6d6385;
+}
+
+.lesson-fragment-meta,
+.lesson-image-suggestion {
+  color: #6d6385;
+  font-size: 0.78rem;
+}
+
+.lesson-fragment-main h4,
+.lesson-preview-card h4 {
+  margin: 2px 0 6px;
+  color: #2f2450;
+}
+
+.lesson-fragment-main p,
+.lesson-preview-card p {
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .lesson-fragment-card {
+    grid-template-columns: 1fr;
+  }
+}

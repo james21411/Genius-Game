@@ -27,6 +27,7 @@ let _questionsTotal = 0;
 let _questionsCorrect = 0;
 let _particles = [];         // confettis/particules de feedback
 let _onComplete = null;      // callback appelé quand la question est terminée
+let _lessonReading = false;
 
 // Pool de questions chargées (depuis API ou fallback local)
 let _questionPool = [];
@@ -126,6 +127,7 @@ export function triggerQuiz(platform, onComplete) {
   _startMs = Date.now();
   _attempt = 1;
   _chosen = null;
+  _lessonReading = !!_question.lesson_content;
   _particles = [];
   _syncOverlay();
 
@@ -149,6 +151,10 @@ export function updateQuiz(dt) {
       break;
 
     case 'active':
+      if (_lessonReading) {
+        _syncOverlay();
+        break;
+      }
       _timer -= dt;
       _syncOverlayTimer();
       if (_timer <= 0) _resolveAnswer(null);
@@ -200,6 +206,13 @@ export function updateQuiz(dt) {
 /** Appelé par les boutons ou touches clavier */
 export function submitAnswer(choice) {
   if (_state !== 'active') return;
+  if (_lessonReading) {
+    _lessonReading = false;
+    _timer = _question.time_limit || 20;
+    _startMs = Date.now();
+    _syncOverlay();
+    return;
+  }
   _chosen = choice;
   document.querySelectorAll('#quizOverlay .quiz-answer-btn').forEach((btn) => {
     btn.disabled = true;
@@ -272,18 +285,32 @@ function _getImageBackgroundHtml(imageName) {
   }
 }
 
+function _escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function _syncOverlay() {
   const overlay = document.getElementById('quizOverlay');
   const controls = document.getElementById('controls');
+  const panel = overlay?.querySelector('.quiz-panel');
   if (!overlay || !_question) return;
 
   const interactive = _active && _state === 'active';
-  overlay.classList.toggle('hidden', !interactive);
-  overlay.setAttribute('aria-hidden', interactive ? 'false' : 'true');
-  controls?.classList.toggle('quiz-blocked', interactive);
+  const visible = _active && ['active', 'correct', 'wrong', 'explaining'].includes(_state);
+  overlay.classList.toggle('hidden', !visible);
+  overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  panel?.classList.toggle('quiz-correct', _state === 'correct');
+  panel?.classList.toggle('quiz-wrong', _state === 'wrong');
+  panel?.classList.toggle('quiz-explaining', _state === 'explaining');
+  controls?.classList.toggle('quiz-blocked', visible);
   window.updateMenuVisibility?.();
 
-  if (!interactive) return;
+  if (!visible) return;
 
   const bloomLabel = {
     knowledge: 'Mémorisation', comprehension: 'Compréhension',
@@ -296,7 +323,71 @@ function _syncOverlay() {
   
   const qText = document.getElementById('quizQuestionText');
   const answersContainer = document.getElementById('quizAnswers');
-  
+  let feedback = document.getElementById('quizFeedback');
+  if (!feedback && panel) {
+    feedback = document.createElement('div');
+    feedback.id = 'quizFeedback';
+    feedback.className = 'quiz-feedback hidden';
+    panel.appendChild(feedback);
+  }
+
+  if (_lessonReading) {
+    document.getElementById('quizBloom').textContent = `Fragment ${_question.lesson_order || ''}`.trim();
+    document.getElementById('quizXp').textContent = 'Lecture';
+    const timerFill = document.getElementById('quizTimerFill');
+    if (timerFill) timerFill.style.width = '100%';
+    qText.textContent = _question.lesson_title || 'Fragment de leçon';
+    answersContainer.className = 'quiz-answers lesson-fragment-reading';
+    answersContainer.style.display = 'block';
+    const imageHtml = _question.lesson_image_data
+      ? (_question.lesson_image_data.startsWith('data:image')
+        ? `<img src="${_question.lesson_image_data}" alt="" class="lesson-fragment-image">`
+        : `<div class="lesson-fragment-image-prompt">${_escapeHtml(_question.lesson_image_data)}</div>`)
+      : '';
+    answersContainer.innerHTML = `
+      <div class="lesson-fragment-content">
+        ${imageHtml}
+        <p>${_escapeHtml(_question.lesson_content || '')}</p>
+        <button type="button" class="arcade-btn lesson-read-btn">J'ai lu</button>
+      </div>
+    `;
+    answersContainer.querySelector('.lesson-read-btn')?.addEventListener('click', () => submitAnswer('__READ__'));
+    feedback?.classList.add('hidden');
+    return;
+  }
+
+  if (!interactive) {
+    document.querySelectorAll('#quizOverlay button, #quizOverlay input, #quizOverlay select').forEach((el) => {
+      el.disabled = true;
+    });
+    if (feedback) {
+      feedback.classList.remove('hidden', 'quiz-feedback-correct', 'quiz-feedback-wrong', 'quiz-feedback-info');
+      if (_state === 'correct') {
+        feedback.classList.add('quiz-feedback-correct');
+        feedback.innerHTML = `
+          <div class="quiz-calm-burst" aria-hidden="true"><span></span><span></span><span></span></div>
+          <strong>Bonne réponse</strong>
+          <p>Respire un instant : ton savoir vient de s'allumer.</p>
+        `;
+      } else if (_state === 'wrong') {
+        feedback.classList.add('quiz-feedback-wrong');
+        feedback.innerHTML = `
+          <strong>On reprend calmement</strong>
+          <p>Observe l'indice, tu as encore une chance.</p>
+        `;
+      } else if (_state === 'explaining') {
+        feedback.classList.add('quiz-feedback-info');
+        feedback.innerHTML = `
+          <strong>Explication</strong>
+          <p>${_question.explanation || 'Garde cette idée en tête pour la prochaine question.'}</p>
+        `;
+      }
+    }
+    return;
+  }
+
+  feedback?.classList.add('hidden');
+
   const type = _question.type || 'qcm';
 
   let extra = {};

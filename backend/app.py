@@ -18,7 +18,7 @@ except ImportError:
 
 from system_prompt import build_system_prompt
 from student_analyzer import get_student_profile
-from generation_prompts import get_generation_prompt
+from generation_prompts import get_generation_prompt, get_lesson_fragments_prompt
 
 # Charger les variables d'environnement depuis .env
 load_dotenv()
@@ -61,7 +61,28 @@ def ensure_schema():
     cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
     if cols and 'points' not in cols:
         conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER DEFAULT 1")
-        conn.commit()
+    if cols and 'lesson_fragment_id' not in cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN lesson_fragment_id INTEGER")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS lesson_fragments (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            world_id    INTEGER NOT NULL,
+            class_id    INTEGER NOT NULL,
+            order_index INTEGER DEFAULT 1,
+            title       TEXT,
+            content     TEXT    NOT NULL,
+            image_data  TEXT,
+            bloom_level TEXT    DEFAULT 'comprehension',
+            question_id INTEGER,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE,
+            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE SET NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lesson_fragments_world ON lesson_fragments(world_id)")
+    conn.commit()
     conn.close()
 
 ensure_schema()
@@ -375,12 +396,18 @@ def get_questions():
     world_id = request.args.get('world_id')
     
     conn = get_db()
+    base_select = """
+        SELECT q.*, lf.title AS lesson_title, lf.content AS lesson_content,
+               lf.image_data AS lesson_image_data, lf.order_index AS lesson_order
+        FROM questions q
+        LEFT JOIN lesson_fragments lf ON lf.id = q.lesson_fragment_id
+    """
     if world_id:
-        questions = conn.execute("SELECT * FROM questions WHERE world_id = ?", (world_id,)).fetchall()
+        questions = conn.execute(base_select + " WHERE q.world_id = ? ORDER BY COALESCE(lf.order_index, q.id), q.id", (world_id,)).fetchall()
     elif class_id:
-        questions = conn.execute("SELECT * FROM questions WHERE class_id = ?", (class_id,)).fetchall()
+        questions = conn.execute(base_select + " WHERE q.class_id = ? ORDER BY q.id", (class_id,)).fetchall()
     else:
-        questions = conn.execute("SELECT * FROM questions LIMIT 20").fetchall()
+        questions = conn.execute(base_select + " ORDER BY q.id LIMIT 20").fetchall()
     conn.close()
     return jsonify([dict(row) for row in questions])
 
@@ -555,6 +582,48 @@ def _call_gemini_for_questions(context, count, bloom_levels, q_type, extra_instr
     return generated
 
 
+def _normalize_lesson_fragment(fragment, order_index=1):
+    question = fragment.get('question') or {}
+    normalized_question = _normalize_generated_question({
+        'type': 'qcm',
+        'topic': fragment.get('title') or question.get('topic') or 'Leçon',
+        'bloom_level': fragment.get('bloom_level') or question.get('bloom_level') or 'comprehension',
+        'question': question.get('question') or '',
+        'answer_a': question.get('answer_a') or '',
+        'answer_b': question.get('answer_b') or '',
+        'answer_c': question.get('answer_c') or '',
+        'answer_d': question.get('answer_d') or '',
+        'correct_answer': question.get('correct_answer') or 'A',
+        'explanation': question.get('explanation') or '',
+        'points': question.get('points') or 1,
+        'time_limit': question.get('time_limit') or 20,
+        'xp_reward': question.get('xp_reward') or 50,
+    }, 'qcm')
+
+    return {
+        'order_index': int(fragment.get('order_index') or order_index),
+        'title': fragment.get('title') or f'Fragment {order_index}',
+        'content': fragment.get('content') or '',
+        'image_data': fragment.get('image_data') or fragment.get('image_prompt') or '',
+        'bloom_level': fragment.get('bloom_level') or normalized_question['bloom_level'] or 'comprehension',
+        'question': normalized_question,
+    }
+
+
+def _call_gemini_for_lesson_fragments(context, count, bloom_levels, extra_instructions=''):
+    if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        raise RuntimeError("Chatbot IA non configuré. Ajoutez GEMINI_API_KEY dans .env")
+
+    prompt = get_lesson_fragments_prompt(context, count, bloom_levels, extra_instructions)
+    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+    response = model.generate_content(prompt)
+    json_text = response.text.replace('```json', '').replace('```', '').strip()
+    generated = json.loads(json_text)
+    if not isinstance(generated, list):
+        raise ValueError("La réponse Gemini n'est pas un tableau JSON")
+    return generated
+
+
 def _insert_question_row(db, class_id, world_id, q_type, q):
     normalized = _normalize_generated_question(q, q_type)
     db.execute('''
@@ -628,6 +697,146 @@ def bulk_add_questions():
     return jsonify({"count": inserted, "message": f"{inserted} question(s) ajoutée(s) à la banque"})
 
 
+@app.route('/api/worlds/<int:world_id>/lesson-fragments', methods=['GET'])
+def get_lesson_fragments(world_id):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT lf.*, q.type, q.question, q.answer_a, q.answer_b, q.answer_c, q.answer_d,
+               q.correct_answer, q.explanation, q.points, q.time_limit, q.xp_reward
+        FROM lesson_fragments lf
+        LEFT JOIN questions q ON q.id = lf.question_id
+        WHERE lf.world_id = ?
+        ORDER BY lf.order_index ASC, lf.id ASC
+    """, (world_id,)).fetchall()
+    conn.close()
+
+    fragments = []
+    for row in rows:
+        item = dict(row)
+        item['check_question'] = {
+            'id': item.get('question_id'),
+            'type': item.get('type') or 'qcm',
+            'question': item.get('question') or '',
+            'answer_a': item.get('answer_a') or '',
+            'answer_b': item.get('answer_b') or '',
+            'answer_c': item.get('answer_c') or '',
+            'answer_d': item.get('answer_d') or '',
+            'correct_answer': item.get('correct_answer') or 'A',
+            'explanation': item.get('explanation') or '',
+            'points': item.get('points') or 1,
+            'time_limit': item.get('time_limit') or 20,
+            'xp_reward': item.get('xp_reward') or 50,
+        }
+        for key in ('type', 'question', 'answer_a', 'answer_b', 'answer_c', 'answer_d',
+                    'correct_answer', 'explanation', 'points', 'time_limit', 'xp_reward'):
+            item.pop(key, None)
+        fragments.append(item)
+    return jsonify(fragments)
+
+
+@app.route('/api/lesson-fragments', methods=['POST'])
+def add_lesson_fragment():
+    data = request.json or {}
+    class_id = data.get('class_id')
+    world_id = data.get('world_id')
+    fragment = _normalize_lesson_fragment(data, data.get('order_index') or 1)
+
+    if not class_id or not world_id or not fragment['content']:
+        return jsonify({"error": "class_id, world_id et contenu requis"}), 400
+
+    conn = get_db()
+    try:
+        q = fragment['question']
+        conn.execute("""
+            INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
+                                 answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                                 extra_data, points, time_limit, xp_reward, lesson_fragment_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        """, (
+            class_id, world_id, 'qcm', data.get('subject') or 'Leçon',
+            data.get('topic') or fragment['title'], fragment['bloom_level'], q['question'],
+            q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
+            q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward']
+        ))
+        question_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("""
+            INSERT INTO lesson_fragments (world_id, class_id, order_index, title, content, image_data, bloom_level, question_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            world_id, class_id, fragment['order_index'], fragment['title'], fragment['content'],
+            fragment['image_data'], fragment['bloom_level'], question_id
+        ))
+        fragment_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("UPDATE questions SET lesson_fragment_id = ? WHERE id = ?", (fragment_id, question_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"fragment_id": fragment_id, "question_id": question_id}), 201
+
+
+@app.route('/api/lesson-fragments/<int:fragment_id>', methods=['DELETE'])
+def delete_lesson_fragment(fragment_id):
+    conn = get_db()
+    row = conn.execute("SELECT question_id FROM lesson_fragments WHERE id = ?", (fragment_id,)).fetchone()
+    if row and row['question_id']:
+        conn.execute("DELETE FROM questions WHERE id = ?", (row['question_id'],))
+    conn.execute("DELETE FROM lesson_fragments WHERE id = ?", (fragment_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Fragment supprimé"}), 200
+
+
+@app.route('/api/lesson-fragments/bulk', methods=['POST'])
+def bulk_add_lesson_fragments():
+    data = request.json or {}
+    class_id = data.get('class_id')
+    world_id = data.get('world_id')
+    fragments = data.get('fragments', [])
+    subject = data.get('subject') or 'Leçon'
+    topic = data.get('topic') or 'Leçon'
+
+    if not class_id or not world_id:
+        return jsonify({"error": "class_id et world_id requis"}), 400
+    if not fragments:
+        return jsonify({"error": "Aucun fragment à importer"}), 400
+
+    conn = get_db()
+    inserted = 0
+    try:
+        for idx, raw in enumerate(fragments, start=1):
+            fragment = _normalize_lesson_fragment(raw, idx)
+            if not fragment['content']:
+                continue
+            q = fragment['question']
+            conn.execute("""
+                INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
+                                     answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                                     extra_data, points, time_limit, xp_reward, lesson_fragment_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            """, (
+                class_id, world_id, 'qcm', subject, topic, fragment['bloom_level'], q['question'],
+                q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
+                q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward']
+            ))
+            question_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("""
+                INSERT INTO lesson_fragments (world_id, class_id, order_index, title, content, image_data, bloom_level, question_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                world_id, class_id, fragment['order_index'], fragment['title'], fragment['content'],
+                fragment['image_data'], fragment['bloom_level'], question_id
+            ))
+            fragment_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("UPDATE questions SET lesson_fragment_id = ? WHERE id = ?", (fragment_id, question_id))
+            inserted += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"count": inserted, "message": f"{inserted} fragment(s) de leçon importé(s)"})
+
+
 @app.route('/api/ai/generate-preview', methods=['POST'])
 def ai_generate_preview():
     try:
@@ -679,6 +888,39 @@ def ai_generate_preview():
         "count": len(all_questions),
         "warnings": errors
     })
+
+
+@app.route('/api/ai/lesson-generate-preview', methods=['POST'])
+def ai_lesson_generate_preview():
+    try:
+        context = _extract_context_from_request()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    num_fragments = int(request.form.get('num_fragments', 4) if request.form else 4)
+    if request.is_json and request.json:
+        num_fragments = int(request.json.get('num_fragments', num_fragments))
+    num_fragments = max(1, min(num_fragments, 20))
+
+    bloom_levels = _parse_json_field(request.form.get('bloom_levels') if request.form else None, ['comprehension'])
+    if request.is_json and request.json:
+        bloom_levels = request.json.get('bloom_levels', bloom_levels)
+
+    chat_context = request.form.get('chat_context', '') if request.form else ''
+    if request.is_json and request.json:
+        chat_context = request.json.get('chat_context', chat_context)
+
+    if not context:
+        return jsonify({"error": "Aucun contenu à analyser (texte ou fichier requis)"}), 400
+    if not bloom_levels:
+        bloom_levels = ['comprehension']
+
+    try:
+        generated = _call_gemini_for_lesson_fragments(context, num_fragments, bloom_levels, chat_context)
+        fragments = [_normalize_lesson_fragment(item, idx + 1) for idx, item in enumerate(generated)]
+        return jsonify({"fragments": fragments, "count": len(fragments), "warnings": []})
+    except Exception as e:
+        return jsonify({"error": f"Erreur Gemini: {str(e)}"}), 500
 
 
 @app.route('/api/ai/teacher-chat', methods=['POST'])
