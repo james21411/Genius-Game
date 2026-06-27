@@ -133,6 +133,11 @@ export function stopMusic() {
   shuffleQueue = [];
 }
 
+export function restartMusic() {
+  stopMusic();
+  startMusic();
+}
+
 export function playJump() {
   if (!soundEnabled()) return;
   initSounds();

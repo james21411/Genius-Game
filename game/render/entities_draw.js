@@ -5,11 +5,18 @@ import { assetsReady, assets } from '../assets.js';
 import { isQuizActive } from '../quiz_engine.js';
 
 export function makeEntitiesDraw({ ctx, assetsReady, assets, world, player, getCanvasSize }){
+  function isVisibleRect(x, y, w, h, margin = 120){
+    const { vw, vh } = getCanvasSize();
+    return x + w >= -margin && x <= vw + margin && y + h >= -margin && y <= vh + margin;
+  }
+
   function drawProjectiles(camX, camY){
     if(!world.projectiles) return;
     for(const proj of world.projectiles){
       const px = Math.round(proj.x - camX);
       const py = Math.round(proj.y - camY);
+      const r = Math.max(16, (proj.r || 8) * 4);
+      if(!isVisibleRect(px - r, py - r, r * 2, r * 2)) continue;
       if(proj.hostile){
         ctx.beginPath();
         ctx.fillStyle = 'rgba(240,120,60,0.98)';

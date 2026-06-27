@@ -8,7 +8,7 @@ import { input } from './controls.js';
 import { assetsReady } from './assets.js';
 import { draw } from './render.js';
 import { isQuizActive, timeScale, updateQuiz, triggerQuiz } from './quiz_engine.js';
-import { playJump, playCollect, playLose, startMusic, pauseMusic, stopMusic } from './sound.js';
+import { playJump, playCollect, playLose, startMusic, stopMusic } from './sound.js';
 
 const GRAVITY = 2200;
 const MOVE_ACC = 2600;
@@ -71,12 +71,32 @@ async function resetGame(){
 }
 
 // simple lazy import helper so we avoid circular static import
+let levelModulePromise = null;
 function awaitImportLevel(){
   // dynamic import to break cycles (level.js has no dependency on engine)
-  return import('./level.js');
+  if(!levelModulePromise) levelModulePromise = import('./level.js');
+  return levelModulePromise;
 }
 
 let last = performance.now();
+let lastGeneratedAhead = 0;
+
+function overlapsX(obj, minX, maxX){
+  const w = obj.w || obj.r || 0;
+  return obj.x + w >= minX && obj.x <= maxX;
+}
+
+function platformsNear(minX, maxX){
+  return world.platforms.filter(p => p.x + p.w >= minX && p.x <= maxX);
+}
+
+function activeRange(extraBehind = 700, extraAhead = 2400){
+  const viewportW = Math.max(800, window.innerWidth || 800);
+  return {
+    minX: player.x - extraBehind,
+    maxX: player.x + viewportW + extraAhead
+  };
+}
 
 export function startEngine(canvas, worldRef, playerRef){
   respawn();
@@ -102,7 +122,7 @@ function loop(now){
     if (window.gameState === 'gameover') {
       stopMusic();
     } else {
-      pauseMusic();
+      startMusic();
     }
     if(player.invulnerable > 0) player.invulnerable -= rawDt;
     draw();
@@ -203,18 +223,25 @@ function loop(now){
   // ensure more level is generated ahead of the player for near-infinite feel
   // request the level module and call ensureGenerated up to some distance ahead
   {
-    const ahead = player.x + (innerWidth * 2) + 2000;
-    awaitImportLevel().then(mod => {
-      if(mod && typeof mod.ensureGenerated === 'function'){
-        try{ mod.ensureGenerated(ahead); }catch(e){}
-      }
-    });
+    const ahead = player.x + ((window.innerWidth || 800) * 2) + 2000;
+    if(ahead > lastGeneratedAhead + 600){
+      lastGeneratedAhead = ahead;
+      awaitImportLevel().then(mod => {
+        if(mod && typeof mod.ensureGenerated === 'function'){
+          try{ mod.ensureGenerated(ahead); }catch(e){}
+        }
+      });
+    }
   }
 
   // collisions with platforms
   player.grounded = false;
   const pbox = {x: player.x, y: player.y, w: player.w, h: player.h};
-  for(const plat of world.platforms){
+  const { minX: physicsMinX, maxX: physicsMaxX } = activeRange();
+  const nearbyPlatforms = platformsNear(player.x - 180, player.x + player.w + 180);
+  const activePlatforms = platformsNear(physicsMinX, physicsMaxX);
+
+  for(const plat of nearbyPlatforms){
     const platBox = {x:plat.x, y:plat.y, w:plat.w, h:plat.h};
     if(pbox.x + pbox.w > platBox.x && pbox.x < platBox.x + platBox.w){
       if(prevY + player.h <= platBox.y && pbox.y + pbox.h >= platBox.y){
@@ -240,6 +267,7 @@ function loop(now){
 
   if (world.trampolines) {
     for(const t of world.trampolines){
+       if(!overlapsX(t, player.x - 180, player.x + player.w + 180)) continue;
        if(t.triggered > 0) t.triggered -= dt;
        if(player.vy >= 0 && rectsOverlap(pbox, {x: t.x, y: t.y, w: t.w, h: t.h})) {
            player.vy = -JUMP_V * 1.5; // huge bounce
@@ -253,6 +281,7 @@ function loop(now){
   // enemies - movement, shooting, collision (stomp) and simple bounce; enemies can spawn projectiles
   const enemiesFrozen = timedEffectActive('enemyFreezeUntil');
   for(const e of world.enemies){
+    if(!overlapsX(e, physicsMinX, physicsMaxX)) continue;
     const enemyDt = enemiesFrozen ? 0 : dt;
     // movement
     if(e.type === 'saw' || e.type === 'spike_head') {
@@ -277,7 +306,7 @@ function loop(now){
       e.y += e.vy * enemyDt;
       e.x += e.dir * e.speed * enemyDt;
       let grounded = false;
-      for (const p of world.platforms) {
+      for (const p of activePlatforms) {
           if (e.vy > 0 && e.y + e.h <= p.y + 10 && e.y + e.h + e.vy*enemyDt >= p.y && e.x + e.w > p.x && e.x < p.x + p.w) {
               e.y = p.y - e.h;
               e.vy = 0;
@@ -288,7 +317,7 @@ function loop(now){
       if(!grounded || e.x < 0 || e.x + e.w > world.width) {
         if (e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
       } else {
-        const under = world.platforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
+        const under = activePlatforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
         if (!under) e.dir *= -1;
       }
     } else if(e.flying){
@@ -296,7 +325,7 @@ function loop(now){
       if(e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
     } else {
       e.x += e.dir * e.speed * enemyDt;
-      const under = world.platforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
+      const under = activePlatforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
       if(!under || e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
     }
 
@@ -517,6 +546,7 @@ function loop(now){
 
   // coins and ammo pickups (coins array used for all visual pickups)
   for(const c of world.coins){
+    if(c.collected || !overlapsX(c, player.x - 260, player.x + player.w + 260)) continue;
     if(!c.collected && timedEffectActive('coinMagnetUntil') && !c.isHeart && !c.isAmmo && !c.ammo){
       const cx = c.x;
       const cy = c.y;
@@ -548,6 +578,7 @@ function loop(now){
         const coinGain = timedEffectActive('coinMultiplierUntil') ? 2 : 1;
         score += 100;
         player.coins = (player.coins || 0) + coinGain;
+        window.addStudentWalletCoins?.(coinGain);
         floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: `+${coinGain} 🪙`});
       }
     }
@@ -557,6 +588,7 @@ function loop(now){
   if (world.livres) {
     for (const livre of world.livres) {
       if (livre.collected) continue;
+      if(!overlapsX(livre, player.x - 300, player.x + player.w + 300) && livre.type !== 'fragments' && livre.type !== 'switch_door') continue;
       
       let unlock = false;
 

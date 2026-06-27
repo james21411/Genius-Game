@@ -39,13 +39,13 @@ export function initLivreDialog() {
       }
 
       textContainer.innerHTML = `
-        <strong style="color: #8e44ad; font-size: 24px;">CONSEIL DU GRIMOIRE :</strong><br>
-        <span style="color: #666; font-size: 18px; font-style: italic;">Pour la question : "${info.question}"</span><br><br>
-        <span style="font-weight: bold; color: #111; font-size: 22px;">💡 Clé pédagogique :</span> ${info.hint}
+        <strong class="grimoire-heading">CONSEIL DU GRIMOIRE :</strong><br>
+        <span class="grimoire-question">Pour la question : "${info.question}"</span><br><br>
+        <span class="grimoire-key">Clé pédagogique :</span> ${info.hint}
       `;
     } else {
       textContainer.innerHTML = `
-        <strong style="color: #8e44ad; font-size: 24px;">GRIMOIRE MYSTIQUE :</strong><br><br>
+        <strong class="grimoire-heading">GRIMOIRE MYSTIQUE :</strong><br><br>
         Révise tes cours de mathématiques et de sciences pour remporter l'aventure Genius !
       `;
     }

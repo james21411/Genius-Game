@@ -3001,3 +3001,58 @@ body {
     height: 64px !important;
   }
 }
+
+/* --- READABILITY PASS: green text on yellow/parchment panels --- */
+:root {
+  --gj-readable-green: #17614f;
+  --gj-readable-green-strong: #0f4f3f;
+}
+
+.login-kicker,
+.login-card-kicker,
+.hub-badge,
+.activity-selected,
+.pause-stats,
+.quiz-meta,
+.quiz-meta span,
+.quiz-hint,
+.history-empty-state,
+.lesson-fragment-image-prompt,
+.wallet-pill,
+.inventory-empty,
+.hub-badge strong,
+.char-name,
+.chat-message.bot .chat-sender,
+.item-price,
+.item-count,
+.settings-feedback {
+  color: var(--gj-readable-green) !important;
+}
+
+.livre-text-box,
+#livreText,
+#livreText *,
+.lesson-fragment-content p,
+.grimoire-question {
+  color: var(--gj-readable-green-strong) !important;
+}
+
+.grimoire-heading,
+.grimoire-key {
+  display: inline-block;
+  color: var(--gj-readable-green) !important;
+  font-weight: 900;
+}
+
+.grimoire-heading {
+  font-size: 24px;
+}
+
+.grimoire-question {
+  font-size: 18px;
+  font-style: italic;
+}
+
+.grimoire-key {
+  font-size: 22px;
+}

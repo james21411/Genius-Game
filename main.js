@@ -6,6 +6,7 @@ import { initRender } from './game/render.js';
 import { initQuizInput, loadQuestions, setSession, getStudentStats, isQuizActive } from './game/quiz_engine.js';
 import { initChatbot } from './game/chatbot.js';
 import { initLivreDialog } from './game/livre_dialog.js';
+import { restartMusic, startMusic } from './game/sound.js';
 
 const API = 'http://localhost:5001/api';
 const STORAGE_KEY = 'geniusjump_student';
@@ -105,18 +106,11 @@ function addWalletCoins(amount) {
   saveEconomy(economy);
   renderShopAndInventory();
 }
+window.addStudentWalletCoins = addWalletCoins;
 
 function syncRunCoinsToWallet() {
-  if (!studentProfile) return;
-  const economy = loadEconomy();
-  const runCoins = Math.max(0, player.coins || 0);
-  const previous = Math.max(0, economy.syncedRunCoins || 0);
-  if (runCoins > previous) {
-    economy.wallet = Math.max(0, (economy.wallet || 0) + (runCoins - previous));
-    economy.syncedRunCoins = runCoins;
-    saveEconomy(economy);
-    renderShopAndInventory();
-  }
+  // Les pieces sont ajoutees au portefeuille au moment exact du ramassage.
+  // Cette fonction reste pour rafraichir les anciens appels sans double-compter.
 }
 
 function resetRunCoinSync() {
@@ -417,12 +411,13 @@ function setupStudentSettings() {
 
 // ── Personnages ───────────────────────────────────────────────────────────────
 const characters = [
-  { id: 'Duthant', src: 'mon_sp_clean.png' },
+  { id: 'Durhant', src: 'mon_sp_clean.png' },
   { id: 'Etoundi', src: 'etoundi_clean.png' },
   { id: 'Maylis', src: 'maylis_clean.png' }
 ];
+const storedCharacter = (localStorage.getItem('selectedCharacter') || 'durhant').replace('duthant', 'durhant');
 let currentCharIndex = characters.findIndex(c =>
-  c.id.toLowerCase() === (localStorage.getItem('selectedCharacter') || 'duthant')
+  c.id.toLowerCase() === storedCharacter
 );
 if (currentCharIndex === -1) currentCharIndex = 0;
 
@@ -733,6 +728,7 @@ async function startGame() {
   player.aiQueries = 1;
   window.levelTimer = 600;
   window._prevStateBeforePause = null;
+  restartMusic();
   window.gameState = 'playing';
   import('./game/engine.js').then(mod => { if (mod?.respawn) mod.respawn(); });
   updateMenuVisibility();
@@ -765,6 +761,7 @@ function updateMenuVisibility() {
     }
     if (bookToggle) bookToggle.style.display = inGameLoop ? '' : 'none';
   } else {
+    if (studentProfile) startMusic();
     menuOverlay.classList.remove('hidden');
     pauseBtn.classList.add('hidden');
     menuOverlay.setAttribute('aria-hidden', 'false');

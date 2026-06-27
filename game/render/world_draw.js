@@ -4,6 +4,11 @@ Focused module: world drawing (sky, banners, platforms, coins, enemies, overlay)
 import { assetsReady, assets } from '../assets.js';
 
 export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanvasSize }){
+  function isVisibleRect(x, y, w, h, margin = 160){
+    const { vw, vh } = getCanvasSize();
+    return x + w >= -margin && x <= vw + margin && y + h >= -margin && y <= vh + margin;
+  }
+
   function drawSky(vw, vh){
     const skyGrad = ctx.createLinearGradient(0, 0, 0, vh);
     skyGrad.addColorStop(0, '#8fcfff');
@@ -203,6 +208,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       const y = Math.round(plat.y - camY);
       const wplat = plat.w;
       const hplat = plat.h;
+      if(!isVisibleRect(x, y, wplat, hplat)) continue;
       const theme = plat.theme || 0;
         if(plat.type === 'quiz_platform') {
           const difficulty = parseInt(plat.difficulty) || 1;
@@ -308,6 +314,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       for(const t of world.trampolines){
         const tx = Math.round(t.x - camX);
         const ty = Math.round(t.y - camY);
+        if(!isVisibleRect(tx, ty, t.w, t.h)) continue;
         const img = (t.triggered > 0) ? assets.trampoline_jump : assets.trampoline_idle;
         if(useTextures && img && img.width){
           ctx.drawImage(img, tx, ty, t.w, t.h);
@@ -324,6 +331,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       if(c.collected) continue;
       const cx = Math.round(c.x - camX);
       const cy = Math.round(c.y - camY);
+      if(!isVisibleRect(cx - 32, cy - 32, 64, 64)) continue;
       
       if(c.isHeart){
         // Draw Heart
@@ -383,6 +391,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
           if (frag.collected) continue;
           const fx = Math.round(frag.x - camX);
           const fy = Math.round(frag.y - camY) + Math.sin(performance.now()/200 + frag.x)*5;
+          if(!isVisibleRect(fx - 28, fy - 28, 56, 56)) continue;
           if(useTextures && assets.scroll_fragment && assets.scroll_fragment.width){
              ctx.drawImage(assets.scroll_fragment, fx - 24, fy - 24, 48, 48);
           } else {
@@ -416,23 +425,25 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
         const dx = Math.round(l.doorX - camX);
         const dy = Math.round(l.doorY - camY);
 
-        if(useTextures && assets.switch_button && assets.switch_button.width){
-           const sh = l.doorOpen ? 20 : 40;
-           const sy = l.doorOpen ? by - 20 : by - 40;
-           ctx.drawImage(assets.switch_button, bx - 24, sy, 48, sh);
-        } else {
-           ctx.fillStyle = l.doorOpen ? '#27ae60' : '#e74c3c';
-           ctx.fillRect(bx - 16, by - (l.doorOpen ? 10 : 20), 32, (l.doorOpen ? 10 : 20));
+        if(isVisibleRect(bx - 28, by - 44, 56, 48)){
+          if(useTextures && assets.switch_button && assets.switch_button.width){
+             const sh = l.doorOpen ? 20 : 40;
+             const sy = l.doorOpen ? by - 20 : by - 40;
+             ctx.drawImage(assets.switch_button, bx - 24, sy, 48, sh);
+          } else {
+             ctx.fillStyle = l.doorOpen ? '#27ae60' : '#e74c3c';
+             ctx.fillRect(bx - 16, by - (l.doorOpen ? 10 : 20), 32, (l.doorOpen ? 10 : 20));
+          }
         }
 
-        if (!l.doorOpen) {
+        if (!l.doorOpen && isVisibleRect(dx - 50, dy - 104, 100, 200)) {
           if(useTextures && assets.door_closed && assets.door_closed.width){
              ctx.drawImage(assets.door_closed, dx - 48, dy - 100, 96, 192);
           } else {
              ctx.fillStyle = '#7f8c8d';
              ctx.fillRect(dx - 30, dy - 60, 60, 120);
           }
-        } else {
+        } else if (l.doorOpen && isVisibleRect(dx - 50, dy - 64, 100, 128)) {
           ctx.beginPath();
           ctx.fillStyle = 'rgba(46, 204, 113, 0.4)';
           ctx.fillRect(dx - 30, dy - 60, 60, 120);
@@ -481,6 +492,7 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       const wobble = Math.cos((now/220) + e.x*0.02) * 2;
       const ex = Math.round(e.x - camX + wobble);
       const ey = Math.round(e.y - camY + bob);
+      if(!isVisibleRect(ex - 80, ey - 80, (e.w || 40) + 160, (e.h || 48) + 180)) continue;
       if(useTextures){
         if(e.boss){
           const bw = e.w || 160, bh = e.h || 160;
