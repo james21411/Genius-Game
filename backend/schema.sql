@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS questions (
     time_limit     INTEGER DEFAULT 15,
     xp_reward      INTEGER DEFAULT 50,
     difficulty     INTEGER DEFAULT 1,
+    points         INTEGER DEFAULT 1,
     extra_data     TEXT,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (world_id) REFERENCES worlds(id)  ON DELETE SET NULL,

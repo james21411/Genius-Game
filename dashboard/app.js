@@ -5,6 +5,31 @@ let currentTeacherId = localStorage.getItem('teacher_id');
 let currentClassId = null;
 let activeTab = 'dashboard';
 
+// Question builder and AI modal globals must be initialized before showApp()
+// because showApp() can run immediately for already-authenticated teachers.
+const QUESTION_TYPES = [
+  { key: 'qcm', label: 'QCM', apiKey: 'qcm' },
+  { key: 'tf', label: 'Vrai / Faux', apiKey: 'tf' },
+  { key: 'short_answer', label: 'Réponse courte', apiKey: 'short_answer' },
+  { key: 'matching', label: 'Association', apiKey: 'matching' },
+  { key: 'dragdrop_text', label: 'Glisser-déposer texte', apiKey: 'dragdrop' },
+  { key: 'dragdrop_image', label: 'Glisser-déposer image', apiKey: 'dragdrop_image' },
+  { key: 'missing_words', label: 'Mots manquants', apiKey: 'missing_words' },
+];
+
+const BLOOM_LEVELS = [
+  { key: 'knowledge', label: 'Mémorisation' },
+  { key: 'comprehension', label: 'Compréhension' },
+  { key: 'application', label: 'Application' },
+  { key: 'analysis', label: 'Analyse' },
+  { key: 'evaluation', label: 'Évaluation' },
+  { key: 'creation', label: 'Création' },
+];
+
+let aiModalInitialized = false;
+let aiChatHistory = [];
+let aiGeneratedPreview = [];
+
 // --- DOM Elements ---
 const authOverlay = document.getElementById('auth-overlay');
 const gameApp = document.getElementById('game-app');
@@ -14,11 +39,12 @@ const navClassCode = document.getElementById('nav-class-code');
 
 // Tab Titles & Descriptions mapping
 const tabInfo = {
-  dashboard: { title: "Tableau de Bord", desc: "Statistiques globales et activité récente de vos élèves." },
-  classes: { title: "Gestion des Classes", desc: "Créez vos classes et configurez les clés d'accès élève." },
-  evaluations: { title: "Évaluations & Leçons", desc: "Configurez les chapitres d'évaluation (évaluation/leçon) de vos classes." },
-  questions: { title: "Banque de Questions", desc: "Configurez les 7 types de questions pédagogiques sans exception." },
-  results: { title: "Registre des Héros", desc: "Consultez les scores détaillés et les réponses de chaque élève." }
+  dashboard: { title: "Tableau de bord", desc: "Statistiques globales et activite recente." },
+  classes: { title: "Classes", desc: "Creez vos classes et les codes d'acces eleve." },
+  lessons: { title: "Lecons", desc: "Configurez des activites d'apprentissage guide." },
+  evaluations: { title: "Evaluations", desc: "Configurez des activites d'evaluation chronometree." },
+  questions: { title: "Banque de questions", desc: "Ajoutez des questions a vos activites ou generez-les depuis vos cours." },
+  results: { title: "Resultats", desc: "Consultez les performances de vos eleves." }
 };
 
 // --- Initialization ---
@@ -40,6 +66,7 @@ async function showApp() {
   
   initSidebar();
   initQuestionBuilder();
+  initAiGeneratorModal();
   await fetchClasses();
 }
 
@@ -65,8 +92,10 @@ function initSidebar() {
         fetchStats();
       } else if (tab === 'classes') {
         fetchClassesList();
+      } else if (tab === 'lessons') {
+        fetchWorldsList('lesson');
       } else if (tab === 'evaluations') {
-        fetchWorldsList();
+        fetchWorldsList('eval');
       } else if (tab === 'questions') {
         fetchWorldsDropdown();
         fetchQuestionsList();
@@ -104,11 +133,11 @@ document.getElementById('btn-login').onclick = async () => {
       currentTeacherId = data.teacher_id;
       showApp();
     } else {
-      feedback.textContent = '❌ ' + (data.error || 'Identifiants invalides');
+      feedback.textContent = 'Erreur : ' + (data.error || 'Identifiants invalides');
       feedback.style.color = '#ef4444';
     }
   } catch (err) { 
-    feedback.textContent = '❌ Erreur de connexion au serveur'; 
+    feedback.textContent = 'Erreur de connexion au serveur'; 
     feedback.style.color = '#ef4444';
   }
 };
@@ -126,15 +155,15 @@ document.getElementById('btn-register').onclick = async () => {
     });
     const data = await res.json();
     if (res.ok) {
-      feedback.textContent = '✅ Compte créé ! Connectez-vous.';
+      feedback.textContent = 'Compte cree ! Connectez-vous.';
       feedback.style.color = '#10b981';
       document.getElementById('btn-show-login').click();
     } else {
-      feedback.textContent = '❌ ' + (data.error || 'Erreur d\'inscription');
+      feedback.textContent = 'Erreur : ' + (data.error || 'Erreur d\'inscription');
       feedback.style.color = '#ef4444';
     }
   } catch (err) { 
-    feedback.textContent = '❌ Erreur de connexion au serveur'; 
+    feedback.textContent = 'Erreur de connexion au serveur'; 
     feedback.style.color = '#ef4444';
   }
 };
@@ -156,7 +185,8 @@ async function fetchClasses() {
       updateClassDisplay();
       if (activeTab === 'dashboard') fetchStats();
       else if (activeTab === 'classes') fetchClassesList();
-      else if (activeTab === 'evaluations') fetchWorldsList();
+      else if (activeTab === 'lessons') fetchWorldsList('lesson');
+      else if (activeTab === 'evaluations') fetchWorldsList('eval');
       else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
     } else {
       classSelect.innerHTML = '<option value="">Créer une classe...</option>';
@@ -171,7 +201,8 @@ classSelect.onchange = (e) => {
   
   if (activeTab === 'dashboard') fetchStats();
   else if (activeTab === 'classes') fetchClassesList();
-  else if (activeTab === 'evaluations') fetchWorldsList();
+  else if (activeTab === 'lessons') fetchWorldsList('lesson');
+  else if (activeTab === 'evaluations') fetchWorldsList('eval');
   else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
   else if (activeTab === 'results') fetchStats();
 };
@@ -225,10 +256,10 @@ classForm.onsubmit = async (e) => {
       if (!classId) currentClassId = data.class_id;
       await fetchClasses();
     } else {
-      alert("❌ Erreur : " + (data.error || "Action impossible"));
+      alert("Erreur : " + (data.error || "Action impossible"));
     }
   } catch (err) {
-    alert("❌ Erreur de communication avec le serveur.");
+    alert("Erreur de communication avec le serveur.");
   }
 };
 
@@ -244,8 +275,8 @@ async function fetchClassesList() {
         <td>${c.grade}</td>
         <td><code style="background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius:4px; font-weight:bold; color:#fbbf24;">${c.code}</code></td>
         <td>
-          <button class="btn btn-secondary btn-sm" onclick="editClass(${c.id}, '${c.name}', '${c.code}', '${c.subject}', '${c.grade}')">✏️ Modifier</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteClass(${c.id})">🗑️ Supprimer</button>
+          <button class="btn btn-secondary btn-sm" onclick="editClass(${c.id}, '${c.name}', '${c.code}', '${c.subject}', '${c.grade}')">Modifier</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteClass(${c.id})">Supprimer</button>
         </td>
       </tr>
     `).join('') || `<tr><td colspan="5" class="text-center">Aucune classe configurée.</td></tr>`;
@@ -273,21 +304,26 @@ window.deleteClass = async (id) => {
   } catch (err) { console.error(err); }
 };
 
-// --- World / Evaluation Management ---
+// --- World / Activity Management (Lecons & Evaluations separees) ---
 const worldModal = document.getElementById('world-modal');
-const btnCreateWorldModal = document.getElementById('btn-create-world-modal');
+const btnCreateLessonModal = document.getElementById('btn-create-lesson-modal');
+const btnCreateEvalModal = document.getElementById('btn-create-eval-modal');
 const btnCloseWorldModal = document.getElementById('btn-close-world-modal');
 const worldForm = document.getElementById('world-form');
 
-btnCreateWorldModal.onclick = () => {
-  document.getElementById('world-modal-title').textContent = "Créer une Évaluation ou Leçon";
-  document.getElementById('modal-world-id').value = "";
-  document.getElementById('world-name-input').value = "";
-  document.getElementById('world-topic-input').value = "";
-  document.getElementById('world-subject-input').value = "Mathématiques";
-  document.getElementById('world-mode-input').value = "eval";
+function openWorldModal(mode) {
+  const isLesson = mode === 'lesson';
+  document.getElementById('world-modal-title').textContent = isLesson ? 'Nouvelle lecon' : 'Nouvelle evaluation';
+  document.getElementById('modal-world-id').value = '';
+  document.getElementById('world-name-input').value = '';
+  document.getElementById('world-topic-input').value = '';
+  document.getElementById('world-subject-input').value = 'Mathematiques';
+  document.getElementById('world-mode-input').value = mode;
   worldModal.classList.remove('hidden');
-};
+}
+
+if (btnCreateLessonModal) btnCreateLessonModal.onclick = () => openWorldModal('lesson');
+if (btnCreateEvalModal) btnCreateEvalModal.onclick = () => openWorldModal('eval');
 
 btnCloseWorldModal.onclick = () => {
   worldModal.classList.add('hidden');
@@ -313,38 +349,37 @@ worldForm.onsubmit = async (e) => {
     });
     if (res.ok) {
       worldModal.classList.add('hidden');
-      await fetchWorldsList();
+      const mode = document.getElementById('world-mode-input').value;
+      await fetchWorldsList(mode);
     }
   } catch (err) { console.error(err); }
 };
 
-async function fetchWorldsList() {
+async function fetchWorldsList(modeFilter) {
   if (!currentClassId) return;
   try {
     const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
     const worlds = await res.json();
-    const tbody = document.getElementById('worlds-list-body');
-    tbody.innerHTML = worlds.map(w => `
+    const filtered = worlds.filter(w => w.mode === modeFilter);
+    const tbodyId = modeFilter === 'lesson' ? 'lessons-list-body' : 'evaluations-list-body';
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    tbody.innerHTML = filtered.map(w => `
       <tr>
         <td><strong>${w.name}</strong></td>
         <td>${w.topic}</td>
+        <td>${w.subject}</td>
         <td>
-          <span style="padding: 4px 8px; border-radius: 4px; font-size:12px; font-weight:bold; ${w.mode === 'eval' ? 'background:rgba(239,68,68,0.15); color:#fca5a5;' : 'background:rgba(59,130,246,0.15); color:#93c5fd;'}">
-            ${w.mode === 'eval' ? '🔥 ÉVALUATION' : '📘 LEÇON'}
-          </span>
-        </td>
-        <td>Mande ${w.world_index}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="editWorld(${w.id}, '${w.name}', '${w.topic}', '${w.subject}', '${w.mode}')">✏️ Modifier</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteWorld(${w.id})">🗑️ Supprimer</button>
+          <button class="btn btn-secondary btn-sm" onclick="editWorld(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.topic.replace(/'/g, "\\'")}', '${w.subject.replace(/'/g, "\\'")}', '${w.mode}')">Modifier</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteWorld(${w.id})">Supprimer</button>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="5" class="text-center">Aucune évaluation ou leçon créée.</td></tr>`;
+    `).join('') || `<tr><td colspan="4" class="text-center">Aucune ${modeFilter === 'lesson' ? 'lecon' : 'evaluation'}.</td></tr>`;
   } catch (err) { console.error(err); }
 }
 
 window.editWorld = (id, name, topic, subject, mode) => {
-  document.getElementById('world-modal-title').textContent = "Modifier le Chapitre";
+  document.getElementById('world-modal-title').textContent = mode === 'lesson' ? 'Modifier la lecon' : 'Modifier l\'evaluation';
   document.getElementById('modal-world-id').value = id;
   document.getElementById('world-name-input').value = name;
   document.getElementById('world-topic-input').value = topic;
@@ -354,95 +389,101 @@ window.editWorld = (id, name, topic, subject, mode) => {
 };
 
 window.deleteWorld = async (id) => {
-  if (!confirm("Voulez-vous supprimer cette évaluation ? Toutes les questions liées seront également affectées.")) return;
+  if (!confirm("Supprimer cette activite ? Les questions liees seront aussi supprimees.")) return;
   try {
     const res = await fetch(`${API}/worlds/${id}`, { method: 'DELETE' });
     if (res.ok) {
-      await fetchWorldsList();
+      await fetchWorldsList('lesson');
+      await fetchWorldsList('eval');
     }
   } catch (err) { console.error(err); }
 };
 
-// --- Question Builder / 7 Types (No exceptions) ---
+// --- Question Builder / 7 Types ---
+
+const TYPE_HELP = {
+  qcm: '',
+  tf: '',
+  short_answer: '',
+  matching: 'Ajoutez des paires à associer ci-dessous.',
+  dragdrop_text: 'Utilisez {slot0}, {slot1}… dans l\'énoncé pour les emplacements.',
+  dragdrop_image: 'Placez des étiquettes sur l\'image via les emplacements X/Y (%).',
+  missing_words: 'Utilisez {select0}, {select1}… dans l\'énoncé pour les menus déroulants.',
+};
+
+function addMatchingPairRow(left = '', right = '') {
+  const list = document.getElementById('matching-pairs-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'matching-pair-row';
+  row.innerHTML = `
+    <input type="text" class="match-left" value="${left}" placeholder="Gauche" required>
+    <input type="text" class="match-right" value="${right}" placeholder="Droite" required>
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+}
+
+function addDdiSlotRow(x = 50, y = 50, label = '') {
+  const list = document.getElementById('ddi-targets-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'ddi-target-row';
+  row.innerHTML = `
+    <input type="number" class="ddi-x" value="${x}" placeholder="X %" min="0" max="100" style="width:70px;" required>
+    <input type="number" class="ddi-y" value="${y}" placeholder="Y %" min="0" max="100" style="width:70px;" required>
+    <input type="text" class="ddi-label" value="${label}" placeholder="Étiquette" required>
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+}
+
+function addMissingWordRow(options = '', correct = '') {
+  const list = document.getElementById('missing-words-list');
+  if (!list) return;
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.className = 'mw-select-row';
+  row.innerHTML = `
+    <span style="font-size:12px; font-weight:bold; min-width:60px;">select${idx} :</span>
+    <input type="text" class="mw-options" value="${options}" placeholder="Choix (virgules)" style="flex:1;" required>
+    <input type="text" class="mw-correct" value="${correct}" placeholder="Correct" style="width:120px;" required>
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+}
 
 function initQuestionBuilder() {
   const qType = document.getElementById('q-type');
   const qTextHelp = document.getElementById('q-text-help');
+  if (!qType) return;
 
   qType.addEventListener('change', () => {
-    // Hide all type containers
     document.querySelectorAll('.q-type-fields').forEach(f => f.classList.add('hidden'));
-    
-    const selected = qType.value;
-    const targetFields = document.getElementById(`fields-${selected}`);
+    const targetFields = document.getElementById(`fields-${qType.value}`);
     if (targetFields) targetFields.classList.remove('hidden');
-
-    // Update help text
-    if (selected === 'dragdrop_text') {
-      qTextHelp.classList.remove('hidden');
-      qTextHelp.innerHTML = "💡 Insérez des trous dans l'énoncé avec des crochets, par exemple : <code>Le chien {slot0} un os et le chat {slot1} du lait.</code>";
-    } else if (selected === 'missing_words') {
-      qTextHelp.classList.remove('hidden');
-      qTextHelp.innerHTML = "💡 Insérez des dropdowns avec des crochets : <code>L'eau gèle à {select0} et bout à {select1}.</code>";
-    } else {
-      qTextHelp.classList.add('hidden');
+    if (qTextHelp) {
+      const help = TYPE_HELP[qType.value];
+      if (help) {
+        qTextHelp.textContent = help;
+        qTextHelp.classList.remove('hidden');
+      } else {
+        qTextHelp.classList.add('hidden');
+      }
     }
   });
 
-  // Dynamic Image targets setup
-  const btnAddDdiTarget = document.getElementById('btn-add-ddi-target');
-  const ddiTargetsList = document.getElementById('ddi-targets-list');
-  
-  btnAddDdiTarget.onclick = () => {
-    const idx = ddiTargetsList.children.length;
-    const row = document.createElement('div');
-    row.className = 'ddi-target-row';
-    row.innerHTML = `
-      <input type="number" class="ddi-x" placeholder="X %" min="0" max="100" style="width:70px;" required>
-      <input type="number" class="ddi-y" placeholder="Y %" min="0" max="100" style="width:70px;" required>
-      <input type="text" class="ddi-label" placeholder="Étiquette correcte (ex: Cœur)" required>
-      <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">❌</button>
-    `;
-    ddiTargetsList.appendChild(row);
-  };
+  document.getElementById('btn-add-matching')?.addEventListener('click', () => addMatchingPairRow());
+  document.getElementById('btn-add-ddi-slot')?.addEventListener('click', () => addDdiSlotRow());
+  document.getElementById('btn-add-mw')?.addEventListener('click', () => addMissingWordRow());
 
-  // Preset image toggle
-  const qDdiImage = document.getElementById('q-ddi-image');
-  qDdiImage.onchange = () => {
-    document.getElementById('q-ddi-custom-url-group').classList.toggle('hidden', qDdiImage.value !== 'custom');
-  };
-
-  // Dynamic Matching pairs setup
-  const btnAddMatchingPair = document.getElementById('btn-add-matching-pair');
-  const matchingPairsList = document.getElementById('matching-pairs-list');
-
-  btnAddMatchingPair.onclick = () => {
-    const row = document.createElement('div');
-    row.className = 'matching-pair-row';
-    row.innerHTML = `
-      <input type="text" class="match-left" placeholder="Élément gauche (ex: Chien)" required>
-      <input type="text" class="match-right" placeholder="Élément associé (ex: Niche)" required>
-      <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">❌</button>
-    `;
-    matchingPairsList.appendChild(row);
-  };
-
-  // Dynamic Missing words choices
-  const btnAddMwSelect = document.getElementById('btn-add-mw-select');
-  const missingWordsList = document.getElementById('missing-words-list');
-
-  btnAddMwSelect.onclick = () => {
-    const idx = missingWordsList.children.length;
-    const row = document.createElement('div');
-    row.className = 'mw-select-row';
-    row.innerHTML = `
-      <span style="font-size:12px; font-weight:bold; min-width:60px;">select${idx} :</span>
-      <input type="text" class="mw-options" placeholder="Choix séparés par des virgules (ex: Rouge, Bleu, Jaune)" style="flex:1;" required>
-      <input type="text" class="mw-correct" placeholder="Choix correct" style="width:120px;" required>
-      <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">❌</button>
-    `;
-    missingWordsList.appendChild(row);
-  };
+  const ddiImage = document.getElementById('q-ddi-image');
+  const ddiCustomWrap = document.getElementById('q-ddi-custom-wrap');
+  if (ddiImage && ddiCustomWrap) {
+    ddiImage.addEventListener('change', () => {
+      ddiCustomWrap.classList.toggle('hidden', ddiImage.value !== 'custom');
+    });
+  }
 }
 
 async function fetchWorldsDropdown() {
@@ -451,7 +492,10 @@ async function fetchWorldsDropdown() {
     const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
     const worlds = await res.json();
     const dropdown = document.getElementById('q-world');
-    dropdown.innerHTML = worlds.map(w => `<option value="${w.id}">${w.name} (${w.topic})</option>`).join('') || '<option value="">-- Créer un chapitre d\'abord --</option>';
+    dropdown.innerHTML = worlds.map(w => {
+      const label = w.mode === 'eval' ? 'Eval' : 'Lecon';
+      return `<option value="${w.id}">[${label}] ${w.name} — ${w.topic}</option>`;
+    }).join('') || '<option value="">Creer une activite d\'abord</option>';
   } catch (err) { console.error(err); }
 }
 
@@ -472,6 +516,7 @@ document.getElementById('question-form').onsubmit = async (e) => {
     topic: document.getElementById('q-topic').value,
     bloom_level: document.getElementById('q-bloom').value,
     question: document.getElementById('q-text').value,
+    points: parseInt(document.getElementById('q-points').value) || 1,
     xp_reward: parseInt(document.getElementById('q-xp').value),
     time_limit: parseInt(document.getElementById('q-timer').value),
     explanation: document.getElementById('q-explanation').value,
@@ -569,16 +614,16 @@ document.getElementById('question-form').onsubmit = async (e) => {
       body: JSON.stringify(payload)
     });
     if (res.ok) {
-      feedback.textContent = '✅ Question enregistrée dans la banque !';
+      feedback.textContent = 'Question enregistree !';
       feedback.className = 'feedback-msg feedback-success';
       resetQuestionForm();
       await fetchQuestionsList();
     } else {
-      feedback.textContent = '❌ Erreur de validation';
+      feedback.textContent = 'Erreur de validation';
       feedback.className = 'feedback-msg feedback-error';
     }
   } catch (err) {
-    feedback.textContent = '❌ Erreur de connexion';
+    feedback.textContent = 'Erreur de connexion';
     feedback.className = 'feedback-msg feedback-error';
   }
 };
@@ -599,7 +644,8 @@ function resetQuestionForm() {
   document.getElementById('matching-pairs-list').innerHTML = "";
   document.getElementById('missing-words-list').innerHTML = "";
   document.getElementById('q-explanation').value = "";
-  document.getElementById('btn-save-question').textContent = "🔨 Forger la Question";
+  document.getElementById('q-points').value = "1";
+  document.getElementById('btn-save-question').textContent = "ENREGISTRER";
 }
 
 document.getElementById('btn-reset-question').onclick = resetQuestionForm;
@@ -615,12 +661,12 @@ async function fetchQuestionsList() {
     tbody.innerHTML = questions.map(q => `
       <tr>
         <td style="max-width:300px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${q.question}</td>
-        <td><span style="background:rgba(255,255,255,0.08); padding:3px 6px; border-radius:4px; font-size:12px;">${q.type.toUpperCase()}</span></td>
+        <td><span style="background:rgba(255,255,255,0.08); padding:3px 6px; border-radius:4px; font-size:12px;">${(q.type || '').toUpperCase()}</span></td>
+        <td><strong>${q.points ?? 1}</strong> pt</td>
         <td>Monde ${q.world_id || '—'}</td>
-        <td>${q.bloom_level}</td>
         <td>
-          <button class="btn btn-secondary btn-sm" onclick="editQuestion(${JSON.stringify(q).replace(/"/g, '&quot;')})">✏️ Modifier</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteQuestion(${q.id})">🗑️ Suppr.</button>
+          <button class="btn btn-secondary btn-sm" onclick="editQuestion(${JSON.stringify(q).replace(/"/g, '&quot;')})">Modifier</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteQuestion(${q.id})">Suppr.</button>
         </td>
       </tr>
     `).join('') || `<tr><td colspan="5" class="text-center">Aucune question configurée pour cette classe.</td></tr>`;
@@ -637,12 +683,13 @@ window.editQuestion = (q) => {
   document.getElementById('q-subject').value = q.subject;
   document.getElementById('q-topic').value = q.topic;
   document.getElementById('q-bloom').value = q.bloom_level;
+  document.getElementById('q-points').value = q.points ?? 1;
   document.getElementById('q-xp').value = q.xp_reward;
   document.getElementById('q-timer').value = q.time_limit || 15;
   document.getElementById('q-text').value = q.question;
   document.getElementById('q-explanation').value = q.explanation || "";
 
-  document.getElementById('btn-save-question').textContent = "💾 Mettre à Jour";
+  document.getElementById('btn-save-question').textContent = "METTRE A JOUR";
 
   // Fill type details
   let extra = {};
@@ -730,8 +777,9 @@ window.deleteQuestion = async (id) => {
   } catch (err) { console.error(err); }
 };
 
-// --- CSV Import ---
-document.getElementById('btn-do-import').onclick = async () => {
+// --- CSV Import (optional UI) ---
+const btnDoImport = document.getElementById('btn-do-import');
+if (btnDoImport) btnDoImport.onclick = async () => {
   if (!currentClassId) return alert("Sélectionnez une classe active !");
   const worldId = document.getElementById('q-world').value;
   if (!worldId) return alert("Sélectionnez ou créez un chapitre pour y affecter les questions !");
@@ -871,3 +919,332 @@ setInterval(() => {
     fetchStats();
   }
 }, 15000);
+
+
+// ─── GÉNÉRATEUR IA (modal intégré à la banque) ───────────────────────────────────
+
+function initAiGeneratorModal() {
+  if (aiModalInitialized) return;
+  aiModalInitialized = true;
+
+  buildAiTypeCountsUI();
+  buildAiBloomChecksUI();
+  updateAiTotalCount();
+
+  document.getElementById('btn-open-ai-modal')?.addEventListener('click', openAiModal);
+  document.getElementById('btn-close-ai-modal')?.addEventListener('click', closeAiModal);
+  document.getElementById('btn-ai-modal-generate')?.addEventListener('click', generateQuestionsPreview);
+  document.getElementById('btn-ai-import')?.addEventListener('click', importGeneratedQuestions);
+  document.getElementById('btn-ai-back-config')?.addEventListener('click', showAiConfigPanel);
+  document.getElementById('btn-ai-chat-send')?.addEventListener('click', sendAiChatMessage);
+  document.getElementById('ai-chat-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendAiChatMessage();
+  });
+
+  document.querySelectorAll('#ai-type-counts input').forEach(input => {
+    input.addEventListener('input', updateAiTotalCount);
+  });
+
+  appendAiChatMessage('assistant', 'Bonjour ! Je peux vous aider à affiner vos consignes avant la génération. Décrivez le niveau de vos élèves ou le type d\'évaluation souhaité.');
+}
+
+function buildAiTypeCountsUI() {
+  const container = document.getElementById('ai-type-counts');
+  if (!container) return;
+  container.innerHTML = QUESTION_TYPES.map(t => `
+    <label class="ai-type-count-row">
+      <span>${t.label}</span>
+      <input type="number" min="0" max="100" value="0" data-type="${t.apiKey}" class="ai-type-count-input">
+    </label>
+  `).join('');
+}
+
+function buildAiBloomChecksUI() {
+  const container = document.getElementById('ai-bloom-checks');
+  if (!container) return;
+  container.innerHTML = BLOOM_LEVELS.map((b, i) => `
+    <label class="ai-bloom-check">
+      <input type="checkbox" value="${b.key}" class="ai-bloom-check-input" ${i < 4 ? 'checked' : ''}>
+      <span>${b.label}</span>
+    </label>
+  `).join('');
+}
+
+function updateAiTotalCount() {
+  const total = [...document.querySelectorAll('#ai-type-counts input')].reduce((sum, el) => sum + (parseInt(el.value) || 0), 0);
+  const badge = document.getElementById('ai-total-count');
+  if (badge) badge.textContent = `Total : ${total} question${total > 1 ? 's' : ''}`;
+}
+
+async function loadAiModalWorlds() {
+  if (!currentClassId) return;
+  try {
+    const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
+    const worlds = await res.json();
+    const dropdown = document.getElementById('ai-modal-world');
+    if (!dropdown) return;
+    dropdown.innerHTML = worlds.map(w => {
+      const label = w.mode === 'eval' ? 'Eval' : 'Leçon';
+      return `<option value="${w.id}">[${label}] ${w.name} — ${w.topic}</option>`;
+    }).join('') || '<option value="">Créer une activité d\'abord</option>';
+  } catch (err) { console.error(err); }
+}
+
+function openAiModal() {
+  if (!currentClassId) {
+    alert('Sélectionnez une classe dans le menu en haut.');
+    return;
+  }
+  loadAiModalWorlds();
+  showAiConfigPanel();
+  document.getElementById('ai-gen-modal')?.classList.remove('hidden');
+}
+
+function closeAiModal() {
+  document.getElementById('ai-gen-modal')?.classList.add('hidden');
+}
+
+function showAiConfigPanel() {
+  document.getElementById('ai-gen-config')?.classList.remove('hidden');
+  document.getElementById('ai-preview-section')?.classList.add('hidden');
+  document.getElementById('ai-gen-loading')?.classList.add('hidden');
+}
+
+function appendAiChatMessage(role, content) {
+  aiChatHistory.push({ role, content });
+  const box = document.getElementById('ai-chat-messages');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = `ai-chat-msg ${role}`;
+  div.textContent = content;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendAiChatMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const message = input?.value.trim();
+  if (!message) return;
+
+  appendAiChatMessage('user', message);
+  input.value = '';
+
+  try {
+    const res = await fetch(`${API}/ai/teacher-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        history: aiChatHistory.slice(0, -1),
+        lesson_context: document.getElementById('ai-modal-context')?.value || ''
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      appendAiChatMessage('assistant', data.reply);
+    } else {
+      appendAiChatMessage('assistant', 'Erreur : ' + (data.error || 'Impossible de contacter le service'));
+    }
+  } catch (err) {
+    appendAiChatMessage('assistant', 'Erreur de connexion au serveur.');
+  }
+}
+
+function getSelectedBloomLevels() {
+  return [...document.querySelectorAll('.ai-bloom-check-input:checked')].map(el => el.value);
+}
+
+function getTypeCountsMap() {
+  const map = {};
+  document.querySelectorAll('#ai-type-counts input').forEach(el => {
+    const count = parseInt(el.value) || 0;
+    if (count > 0) map[el.dataset.type] = count;
+  });
+  return map;
+}
+
+function formatQuestionPreviewAnswers(q) {
+  const type = q.type || 'qcm';
+  if (type === 'qcm') {
+    return `<div>A) ${q.answer_a || '—'}</div><div>B) ${q.answer_b || '—'}</div><div>C) ${q.answer_c || '—'}</div><div>D) ${q.answer_d || '—'}</div><div><strong>Bonne réponse :</strong> ${q.correct_answer}</div>`;
+  }
+  if (type === 'tf' || type === 'short_answer') {
+    return `<div><strong>Réponse :</strong> ${q.correct_answer}</div>`;
+  }
+  let extra = q.extra_data;
+  if (typeof extra === 'string') {
+    try { extra = JSON.parse(extra); } catch (e) { extra = {}; }
+  }
+  if (type === 'matching') {
+    const pairs = extra?.pairs || {};
+    return Object.keys(pairs).map(k => `<div>${k} → ${pairs[k]}</div>`).join('') || `<div>${JSON.stringify(extra)}</div>`;
+  }
+  if (type === 'dragdrop_text') {
+    return `<div><strong>Choix :</strong> ${(extra?.choices || []).join(', ')}</div><div><strong>Ordre :</strong> ${(extra?.correct || q.correct_answer || '').toString()}</div>`;
+  }
+  if (type === 'dragdrop_image') {
+    return `<div><strong>Image :</strong> ${extra?.image || '—'}</div><div><strong>Étiquettes :</strong> ${(extra?.labels || []).join(', ')}</div>`;
+  }
+  if (type === 'missing_words') {
+    return `<div><strong>Réponses :</strong> ${(extra?.correct || q.correct_answer || '').toString()}</div>`;
+  }
+  return `<div>${q.correct_answer || ''}</div>`;
+}
+
+function renderAiPreview() {
+  const list = document.getElementById('ai-preview-list');
+  const countEl = document.getElementById('ai-preview-count');
+  if (!list) return;
+
+  countEl.textContent = aiGeneratedPreview.length;
+  list.innerHTML = aiGeneratedPreview.map((q, idx) => {
+    const typeLabel = QUESTION_TYPES.find(t => t.key === q.type || t.apiKey === q.type)?.label || q.type;
+    return `
+      <div class="ai-preview-card" data-idx="${idx}">
+        <div class="ai-preview-card-header">
+          <span class="ai-preview-badge">${typeLabel}</span>
+          <span class="ai-preview-badge">${BLOOM_LEVELS.find(b => b.key === q.bloom_level)?.label || q.bloom_level}</span>
+          <label class="ai-preview-points">
+            Points :
+            <input type="number" min="1" max="100" value="${q.points || 1}" data-preview-points="${idx}">
+          </label>
+        </div>
+        <p><strong>${q.question}</strong></p>
+        <div class="ai-preview-answers">${formatQuestionPreviewAnswers(q)}</div>
+        ${q.explanation ? `<p class="ai-preview-answers" style="margin-top:8px;"><strong>Indication :</strong> ${q.explanation}</p>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('[data-preview-points]').forEach(input => {
+    input.addEventListener('change', () => {
+      const idx = parseInt(input.dataset.previewPoints);
+      aiGeneratedPreview[idx].points = parseInt(input.value) || 1;
+    });
+  });
+}
+
+async function generateQuestionsPreview() {
+  const worldId = document.getElementById('ai-modal-world')?.value;
+  const context = document.getElementById('ai-modal-context')?.value.trim() || '';
+  const fileInput = document.getElementById('ai-modal-file');
+  const feedback = document.getElementById('ai-modal-feedback');
+  const typeCounts = getTypeCountsMap();
+  const bloomLevels = getSelectedBloomLevels();
+  const total = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+
+  if (!worldId) {
+    feedback.textContent = '⚠️ Sélectionnez une activité cible.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+  if (total <= 0) {
+    feedback.textContent = '⚠️ Indiquez au moins une question par type.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+  if (!bloomLevels.length) {
+    feedback.textContent = '⚠️ Sélectionnez au moins un niveau Bloom.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+  if (!context && (!fileInput?.files || !fileInput.files.length)) {
+    feedback.textContent = '⚠️ Fournissez un contenu de leçon ou un fichier.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+    return;
+  }
+
+  const chatContext = aiChatHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+  const formData = new FormData();
+  formData.append('context', context);
+  formData.append('type_counts', JSON.stringify(typeCounts));
+  formData.append('bloom_levels', JSON.stringify(bloomLevels));
+  formData.append('chat_context', chatContext);
+  if (fileInput?.files?.[0]) formData.append('file', fileInput.files[0]);
+
+  document.getElementById('ai-gen-config')?.classList.add('hidden');
+  document.getElementById('ai-preview-section')?.classList.add('hidden');
+  document.getElementById('ai-gen-loading')?.classList.remove('hidden');
+  feedback.textContent = '';
+
+  try {
+    const res = await fetch(`${API}/ai/generate-preview`, { method: 'POST', body: formData });
+    const data = await res.json();
+    document.getElementById('ai-gen-loading')?.classList.add('hidden');
+
+    if (res.ok) {
+      aiGeneratedPreview = data.questions || [];
+      renderAiPreview();
+      document.getElementById('ai-preview-section')?.classList.remove('hidden');
+      if (data.warnings?.length) {
+        feedback.textContent = '⚠️ ' + data.warnings.join(' | ');
+        feedback.className = 'ai-feedback ai-feedback-error';
+      }
+    } else {
+      showAiConfigPanel();
+      feedback.textContent = '❌ ' + (data.error || 'Erreur lors de la génération');
+      feedback.className = 'ai-feedback ai-feedback-error';
+    }
+  } catch (err) {
+    document.getElementById('ai-gen-loading')?.classList.add('hidden');
+    showAiConfigPanel();
+    feedback.textContent = '❌ Erreur de connexion au serveur.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+  }
+}
+
+async function importGeneratedQuestions() {
+  const worldId = document.getElementById('ai-modal-world')?.value;
+  const feedback = document.getElementById('ai-import-feedback');
+  const btn = document.getElementById('btn-ai-import');
+
+  if (!aiGeneratedPreview.length) return;
+
+  btn.disabled = true;
+  feedback.textContent = 'Chargement en cours…';
+  feedback.className = 'ai-feedback';
+
+  try {
+    const res = await fetch(`${API}/questions/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        class_id: parseInt(currentClassId),
+        world_id: parseInt(worldId),
+        questions: aiGeneratedPreview
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      feedback.textContent = `✅ ${data.count} question(s) chargée(s) dans la banque !`;
+      feedback.className = 'ai-feedback ai-feedback-success';
+      await fetchQuestionsList();
+      setTimeout(() => closeAiModal(), 1500);
+    } else {
+      feedback.textContent = '❌ ' + (data.error || 'Erreur lors du chargement');
+      feedback.className = 'ai-feedback ai-feedback-error';
+    }
+  } catch (err) {
+    feedback.textContent = '❌ Erreur de connexion.';
+    feedback.className = 'ai-feedback ai-feedback-error';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * Simple Markdown renderer (bold, headers, lists, line breaks)
+ */
+function renderMarkdown(text) {
+  return text
+    .replace(/^### (.+)$/gm, '<h4 class="ai-h">$1</h4>')
+    .replace(/^## (.+)$/gm,  '<h3 class="ai-h">$1</h3>')
+    .replace(/^# (.+)$/gm,   '<h2 class="ai-h">$1</h2>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,    '<em>$1</em>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*?<\/li>\n?)+/gs, match => `<ul>${match}</ul>`)
+    .replace(/\n{2,}/g, '</p><p class="ai-p">')
+    .replace(/\n/g, '<br>')
+    .replace(/^(.+)$/, '<p class="ai-p">$1</p>');
+}

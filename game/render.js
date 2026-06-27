@@ -1,7 +1,6 @@
 import { assetsReady, assets } from './assets.js';
 import { world, player } from './level.js';
 import { makeDrawHelpers } from './render_helpers.js';
-import { drawQuiz } from './quiz_engine.js';
 
 let canvas, ctx, DPR = Math.max(1, window.devicePixelRatio || 1);
 let helpers = null;
@@ -72,9 +71,6 @@ export function draw(){
   helpers.drawProjectiles(camX, camY);
   helpers.drawPlayer(camX, camY, useTextures);
   helpers.drawAmmoAndHUD(camX, camY, useTextures);
-
-  // ── Draw educational quiz overlay on top of gameplay ────────────
-  drawQuiz(ctx, vw, vh);
 
   // draw menu / game over overlay if state is not playing
   if(typeof window.gameState !== 'undefined' && window.gameState !== 'playing'){

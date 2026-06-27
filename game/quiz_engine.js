@@ -45,52 +45,41 @@ const ANSWERS = ['A', 'B', 'C', 'D'];
 // ── API publique ──────────────────────────────────────────────────────────────
 
 export async function loadQuestions(worldId) {
-  if (!worldId) return;
+  _questionPool = [];
+  _poolIndex = 0;
+
+  if (!worldId) {
+    console.warn('[Quiz] Aucune activite selectionnee — pas de questions chargees.');
+    return false;
+  }
+
   try {
     const res = await fetch(`${API}/questions?world_id=${worldId}`);
     if (res.ok) {
       const apiQuestions = await res.json();
-      // Inject demo questions (TF, Matching, DragDrop) for testing purposes
-      const demoQuestions = BUILTIN_FALLBACK.filter(q => q.type && q.type !== 'qcm');
-      _questionPool = [...apiQuestions, ...demoQuestions];
-      console.log(`[Quiz] ${_questionPool.length} questions chargées (API + Démo)`);
+      if (apiQuestions.length === 0) {
+        console.warn(`[Quiz] Activite ${worldId} : aucune question configuree.`);
+        return false;
+      }
+      _questionPool = apiQuestions;
       _shufflePool();
-      return;
+      console.log(`[Quiz] ${_questionPool.length} questions pour activite ${worldId}`);
+      return true;
     }
-  } catch (_) { }
-  // Fallback : charger depuis le JSON local
-  try {
-    const res = await fetch('./data/default_content.json');
-    if (!res.ok) throw new Error('404');
-    const data = await res.json();
-    _questionPool = data.questions || [];
-    console.log(`[Quiz] Fallback local : ${_questionPool.length} questions`);
-  } catch (_) {
-    _questionPool = [...BUILTIN_FALLBACK]; // copie pour ne pas altérer l'original
-    console.log('[Quiz] Fallback intégré utilisé');
+  } catch (err) {
+    console.warn('[Quiz] Erreur API:', err);
   }
-  _shufflePool();
+
+  console.warn('[Quiz] Impossible de charger les questions — pas de fallback pour une activite configuree.');
+  return false;
 }
 
-/** Mélange aléatoire du pool, mais garantit que les nouveaux types (TF, Matching, DragDrop) sont au début pour la démo */
+/** Mélange aléatoire du pool de questions */
 function _shufflePool() {
-  const demoQ = _questionPool.filter(q => q.type && q.type !== 'qcm');
-  const normalQ = _questionPool.filter(q => !q.type || q.type === 'qcm');
-
-  // Mélange les normales
-  for (let i = normalQ.length - 1; i > 0; i--) {
+  for (let i = _questionPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [normalQ[i], normalQ[j]] = [normalQ[j], normalQ[i]];
+    [_questionPool[i], _questionPool[j]] = [_questionPool[j], _questionPool[i]];
   }
-  
-  // Mélange les démos
-  for (let i = demoQ.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [demoQ[i], demoQ[j]] = [demoQ[j], demoQ[i]];
-  }
-
-  // Les démos en premier !
-  _questionPool = [...demoQ, ...normalQ];
   _poolIndex = 0;
 }
 
@@ -292,6 +281,7 @@ function _syncOverlay() {
   overlay.classList.toggle('hidden', !interactive);
   overlay.setAttribute('aria-hidden', interactive ? 'false' : 'true');
   controls?.classList.toggle('quiz-blocked', interactive);
+  window.updateMenuVisibility?.();
 
   if (!interactive) return;
 
@@ -301,7 +291,7 @@ function _syncOverlay() {
     evaluation: 'Évaluation', creation: 'Création'
   }[_question.bloom_level] || 'Question';
 
-  document.getElementById('quizBloom').textContent = `❓ ${bloomLabel}`;
+  document.getElementById('quizBloom').textContent = bloomLabel;
   document.getElementById('quizXp').textContent = `+${_question.xp_reward || 50} XP`;
   
   const qText = document.getElementById('quizQuestionText');
@@ -738,6 +728,7 @@ function _normalizeChoice(choice) {
  * Appeler depuis render.js APRÈS drawEnemies et drawPlayer.
  */
 export function drawQuiz(ctx, vw, vh) {
+  return;
   if (!_active || !_question) return;
 
   const slideY = _getSlideY(vh);
@@ -884,6 +875,7 @@ function _resolveAnswer(choice) {
       player.lives = Math.max(0, player.lives - 1);
       if (player.lives <= 0) {
         window.gameState = 'gameover';
+        window.updateMenuVisibility?.();
       }
     }
   }
@@ -1099,7 +1091,7 @@ export function getNextQuestionHint() {
     if (nextQ) {
       return {
         question: nextQ.question,
-        hint: nextQ.explanation || `Indice de l'IA : Révise bien le sujet de la question suivante : "${nextQ.question}"`
+        hint: nextQ.explanation || `Indice du grimoire : Révise bien le sujet de la question suivante : "${nextQ.question}"`
       };
     }
   }
@@ -1108,4 +1100,3 @@ export function getNextQuestionHint() {
     hint: "Indice : Récolte les pièces et les cibles pour améliorer ton score et préparer tes examens !"
   };
 }
-

@@ -1,3 +1,5 @@
+import argparse
+import io
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
@@ -6,18 +8,44 @@ import hashlib
 import random
 import string
 import json
+from dotenv import load_dotenv
 import google.generativeai as genai
-import PyPDF2
-import io
+
+try:
+    import PyPDF2
+except ImportError:
+    PyPDF2 = None
+
+from system_prompt import build_system_prompt
+from student_analyzer import get_student_profile
+from generation_prompts import get_generation_prompt
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 # --- CONFIGURATION GEMINI ---
-# Remplacez par votre clé API réelle ou définissez GEMINI_API_KEY en variable d'env
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCOdhbViNV4LefjSatAbSozn9iAS-xKtOo')
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-pro-latest')
-genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.5-flash')
+
+if GEMINI_API_KEY and GEMINI_API_KEY != 'YOUR_GEMINI_API_KEY_HERE':
+    genai.configure(api_key=GEMINI_API_KEY)
+    print(f"OK Gemini API configuree avec le modele: {GEMINI_MODEL_NAME}")
+else:
+    print("WARN  GEMINI_API_KEY non définie dans .env - le chatbot IA sera désactivé")
+
+# Charger la base de connaissance
+KNOWLEDGE_BASE = {}
+knowledge_path = os.path.join(os.path.dirname(__file__), 'knowledge_base.json')
+if os.path.exists(knowledge_path):
+    try:
+        with open(knowledge_path, 'r', encoding='utf-8') as f:
+            KNOWLEDGE_BASE = json.load(f)
+        print(f"OK Base de connaissance chargée ({len(KNOWLEDGE_BASE)} sections)")
+    except Exception as e:
+        print(f"WARN  Erreur chargement base de connaissance: {e}")
 
 
 
@@ -27,6 +55,16 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+def ensure_schema():
+    conn = get_db()
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
+    if cols and 'points' not in cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER DEFAULT 1")
+        conn.commit()
+    conn.close()
+
+ensure_schema()
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -251,11 +289,14 @@ def delete_world(world_id):
 @app.route('/api/students/join', methods=['POST'])
 def join_class():
     data = request.json
-    name = data.get('name')
-    code = data.get('code')
+    name = (data.get('name') or '').strip()
+    code = (data.get('code') or '').strip().upper()
+
+    if not name or not code:
+        return jsonify({"error": "Nom et code de classe requis"}), 400
     
     conn = get_db()
-    class_row = conn.execute("SELECT id FROM classes WHERE code = ?", (code,)).fetchone()
+    class_row = conn.execute("SELECT id FROM classes WHERE UPPER(TRIM(code)) = ?", (code,)).fetchone()
     if not class_row:
         conn.close()
         return jsonify({"error": "Code de classe invalide"}), 404
@@ -350,12 +391,13 @@ def add_question():
     conn.execute("""
         INSERT INTO questions (world_id, class_id, type, subject, topic, bloom_level, question, 
                              answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
-                             time_limit, xp_reward, difficulty, extra_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             time_limit, xp_reward, difficulty, points, extra_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (data.get('world_id'), data.get('class_id'), data.get('type', 'qcm'), data.get('subject'), data.get('topic'),
           data.get('bloom_level'), data.get('question'), data.get('answer_a'), data.get('answer_b'),
           data.get('answer_c'), data.get('answer_d'), data.get('correct_answer'), data.get('explanation'),
-          data.get('time_limit', 15), data.get('xp_reward', 50), data.get('difficulty', 1), data.get('extra_data')))
+          data.get('time_limit', 15), data.get('xp_reward', 50), data.get('difficulty', 1),
+          data.get('points', 1), data.get('extra_data')))
     conn.commit()
     conn.close()
     return jsonify({"message": "Question ajoutée"}), 201
@@ -368,12 +410,12 @@ def update_question(question_id):
         UPDATE questions SET 
             type = ?, subject = ?, topic = ?, bloom_level = ?, question = ?,
             answer_a = ?, answer_b = ?, answer_c = ?, answer_d = ?,
-            correct_answer = ?, explanation = ?, xp_reward = ?, time_limit = ?, extra_data = ?
+            correct_answer = ?, explanation = ?, xp_reward = ?, time_limit = ?, points = ?, extra_data = ?
         WHERE id = ?
     """, (data.get('type'), data.get('subject'), data.get('topic'), data.get('bloom_level'), data.get('question'),
           data.get('answer_a'), data.get('answer_b'), data.get('answer_c'), data.get('answer_d'),
           data.get('correct_answer'), data.get('explanation'), data.get('xp_reward', 50), data.get('time_limit', 15),
-          data.get('extra_data'), question_id))
+          data.get('points', 1), data.get('extra_data'), question_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Question mise à jour"}), 200
@@ -417,71 +459,486 @@ def get_stats():
         "heatmap": [dict(h) for h in heatmap]
     })
 
+def _extract_context_from_request():
+    context = request.form.get('context', '') if request.form else ''
+    if request.is_json and request.json:
+        context = request.json.get('context', context)
+
+    file = request.files.get('file') if request.files else None
+    if file and file.filename:
+        filename = file.filename.lower()
+        if filename.endswith('.pdf'):
+            if not PyPDF2:
+                raise ValueError("PyPDF2 non installé — impossible de lire le PDF")
+            reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+            extracted_text = ""
+            for page in reader.pages:
+                extracted_text += (page.extract_text() or "") + "\n"
+            context = extracted_text + "\n" + context
+        elif filename.endswith('.txt'):
+            context = file.read().decode('utf-8', errors='replace') + "\n" + context
+
+    return context.strip()
+
+
+def _parse_json_field(raw, default=None):
+    if default is None:
+        default = {}
+    if not raw:
+        return default
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return default
+
+
+def _normalize_generated_question(q, q_type):
+    extra_data = q.get('extra_data')
+    if isinstance(extra_data, str):
+        try:
+            extra_data = json.loads(extra_data)
+        except (json.JSONDecodeError, TypeError):
+            extra_data = {}
+    if isinstance(extra_data, dict):
+        if q_type == 'matching' and 'pairs' not in extra_data:
+            left = extra_data.get('left_items', [])
+            right = extra_data.get('right_items', [])
+            if left and right and len(left) == len(right):
+                extra_data['pairs'] = {str(l): str(r) for l, r in zip(left, right)}
+        extra_data = json.dumps(extra_data, ensure_ascii=False)
+    elif extra_data is None:
+        extra_data = ''
+
+    correct_answer = q.get('correct_answer')
+    if q_type == 'matching' and (not correct_answer or correct_answer == ''):
+        try:
+            parsed = json.loads(extra_data) if isinstance(extra_data, str) else extra_data
+            if isinstance(parsed, dict) and parsed.get('pairs'):
+                correct_answer = json.dumps(parsed['pairs'], ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    stored_type = 'dragdrop_text' if q_type == 'dragdrop' else q_type
+
+    return {
+        'type': stored_type,
+        'subject': q.get('subject') or 'IA Gemini',
+        'topic': q.get('topic') or 'Généré IA',
+        'bloom_level': q.get('bloom_level') or 'comprehension',
+        'question': q.get('question') or '',
+        'answer_a': q.get('answer_a') or '',
+        'answer_b': q.get('answer_b') or '',
+        'answer_c': q.get('answer_c') or '',
+        'answer_d': q.get('answer_d') or '',
+        'correct_answer': correct_answer if correct_answer is not None else '',
+        'explanation': q.get('explanation') or '',
+        'extra_data': extra_data,
+        'points': int(q.get('points') or 1),
+        'time_limit': int(q.get('time_limit') or 15),
+        'xp_reward': int(q.get('xp_reward') or 50),
+    }
+
+
+def _call_gemini_for_questions(context, count, bloom_levels, q_type, extra_instructions=''):
+    if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        raise RuntimeError("Chatbot IA non configuré. Ajoutez GEMINI_API_KEY dans .env")
+
+    prompt = get_generation_prompt(context, count, bloom_levels, q_type, extra_instructions)
+    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+    response = model.generate_content(prompt)
+    json_text = response.text.replace('```json', '').replace('```', '').strip()
+    generated = json.loads(json_text)
+    if not isinstance(generated, list):
+        raise ValueError("La réponse Gemini n'est pas un tableau JSON")
+    return generated
+
+
+def _insert_question_row(db, class_id, world_id, q_type, q):
+    normalized = _normalize_generated_question(q, q_type)
+    db.execute('''
+        INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
+                             answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                             extra_data, points, time_limit, xp_reward)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        class_id, world_id, normalized['type'], normalized['subject'], normalized['topic'],
+        normalized['bloom_level'], normalized['question'],
+        normalized['answer_a'], normalized['answer_b'], normalized['answer_c'], normalized['answer_d'],
+        normalized['correct_answer'], normalized['explanation'], normalized['extra_data'],
+        normalized['points'], normalized['time_limit'], normalized['xp_reward']
+    ))
+
+
+@app.route('/api/questions/bulk', methods=['POST'])
+def bulk_add_questions():
+    data = request.json or {}
+    class_id = data.get('class_id')
+    world_id = data.get('world_id')
+    questions = data.get('questions', [])
+
+    if not class_id or not world_id:
+        return jsonify({"error": "class_id et world_id requis"}), 400
+    if not questions:
+        return jsonify({"error": "Aucune question à importer"}), 400
+
+    db = get_db()
+    inserted = 0
+    try:
+        for q in questions:
+            q_type = q.get('type', 'qcm')
+            if q_type == 'dragdrop':
+                q_type = 'dragdrop_text'
+            row = {
+                'subject': q.get('subject', 'IA Gemini'),
+                'topic': q.get('topic', 'Généré IA'),
+                'bloom_level': q.get('bloom_level', 'comprehension'),
+                'question': q.get('question', ''),
+                'answer_a': q.get('answer_a', ''),
+                'answer_b': q.get('answer_b', ''),
+                'answer_c': q.get('answer_c', ''),
+                'answer_d': q.get('answer_d', ''),
+                'correct_answer': q.get('correct_answer', ''),
+                'explanation': q.get('explanation', ''),
+                'extra_data': q.get('extra_data'),
+                'points': q.get('points', 1),
+                'time_limit': q.get('time_limit', 15),
+                'xp_reward': q.get('xp_reward', 50),
+            }
+            extra_data = row['extra_data']
+            if isinstance(extra_data, dict):
+                extra_data = json.dumps(extra_data, ensure_ascii=False)
+            db.execute('''
+                INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
+                                     answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                                     extra_data, points, time_limit, xp_reward)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                class_id, world_id, q_type, row['subject'], row['topic'], row['bloom_level'], row['question'],
+                row['answer_a'], row['answer_b'], row['answer_c'], row['answer_d'],
+                row['correct_answer'], row['explanation'], extra_data or '',
+                row['points'], row['time_limit'], row['xp_reward']
+            ))
+            inserted += 1
+        db.commit()
+    finally:
+        db.close()
+
+    return jsonify({"count": inserted, "message": f"{inserted} question(s) ajoutée(s) à la banque"})
+
+
+@app.route('/api/ai/generate-preview', methods=['POST'])
+def ai_generate_preview():
+    try:
+        context = _extract_context_from_request()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    type_counts = _parse_json_field(request.form.get('type_counts') if request.form else None, {})
+    if request.is_json and request.json:
+        type_counts = request.json.get('type_counts', type_counts)
+
+    bloom_levels = _parse_json_field(request.form.get('bloom_levels') if request.form else None, ['comprehension'])
+    if request.is_json and request.json:
+        bloom_levels = request.json.get('bloom_levels', bloom_levels)
+
+    chat_context = request.form.get('chat_context', '') if request.form else ''
+    if request.is_json and request.json:
+        chat_context = request.json.get('chat_context', chat_context)
+
+    if not context:
+        return jsonify({"error": "Aucun contenu à analyser (texte ou fichier requis)"}), 400
+
+    if not type_counts or sum(int(v or 0) for v in type_counts.values()) <= 0:
+        return jsonify({"error": "Configurez au moins une question par type"}), 400
+
+    if not bloom_levels:
+        bloom_levels = ['comprehension']
+
+    all_questions = []
+    errors = []
+
+    for q_type, count in type_counts.items():
+        count = int(count or 0)
+        if count <= 0:
+            continue
+        try:
+            generated = _call_gemini_for_questions(context, count, bloom_levels, q_type, chat_context)
+            for item in generated:
+                normalized = _normalize_generated_question(item, q_type)
+                all_questions.append(normalized)
+        except Exception as e:
+            errors.append(f"{q_type}: {str(e)}")
+
+    if not all_questions:
+        return jsonify({"error": errors[0] if errors else "Aucune question générée"}), 500
+
+    return jsonify({
+        "questions": all_questions,
+        "count": len(all_questions),
+        "warnings": errors
+    })
+
+
+@app.route('/api/ai/teacher-chat', methods=['POST'])
+def ai_teacher_chat():
+    if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        return jsonify({"error": "IA non configurée"}), 503
+
+    data = request.json or {}
+    message = (data.get('message') or '').strip()
+    history = data.get('history', [])
+    lesson_context = (data.get('lesson_context') or '').strip()
+
+    if not message:
+        return jsonify({"error": "Message vide"}), 400
+
+    history_text = ""
+    for item in history[-8:]:
+        role = item.get('role', 'user')
+        content = item.get('content', '')
+        history_text += f"{role.upper()}: {content}\n"
+
+    prompt = f"""Tu es un assistant pédagogique pour enseignants utilisant Genius Jump EDU.
+Aide l'enseignant à préparer des questions d'évaluation (QCM, vrai/faux, association, etc.).
+
+Contexte du cours (extrait) :
+{lesson_context[:3000] if lesson_context else '(non fourni)'}
+
+Historique :
+{history_text}
+
+ENSEIGNANT: {message}
+
+Réponds en français, de façon concise et utile."""
+
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(prompt)
+        return jsonify({"reply": response.text.strip()})
+    except Exception as e:
+        return jsonify({"error": f"Erreur Gemini: {str(e)}"}), 500
+
+
 @app.route('/api/ai/generate', methods=['POST'])
 def ai_generate():
-    # Avec FormData, les données sont dans request.form et les fichiers dans request.files
-    context = request.form.get('context', '')
+    # Compatibilité : génération directe (ancien flux Labo IA)
+    try:
+        context = _extract_context_from_request()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
     num = int(request.form.get('num', 5))
     class_id = request.form.get('class_id')
     world_id = request.form.get('world_id')
     bloom = request.form.get('bloom', 'knowledge')
-    
-    # Extraction de texte si un fichier est fourni
-    file = request.files.get('file')
-    if file:
-        filename = file.filename.lower()
-        if filename.endswith('.pdf'):
-            try:
-                reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
-                extracted_text = ""
-                for page in reader.pages:
-                    extracted_text += page.extract_text() + "\n"
-                context = extracted_text + "\n" + context
-            except Exception as e:
-                return jsonify({"error": f"Erreur lecture PDF: {str(e)}"}), 400
-        elif filename.endswith('.txt'):
-            context = file.read().decode('utf-8') + "\n" + context
+    q_type = request.form.get('question_type', 'qcm')
 
-    if not context.strip():
+    if not context:
         return jsonify({"error": "Aucun contenu à analyser"}), 400
 
-    # --- APPEL RÉEL GEMINI ---
-    prompt = f"""
-    En tant qu'expert pédagogique, génère {num} questions éducatives à partir du support suivant :
-    "{context}"
-    
-    Paramètres :
-    - Niveau Bloom ciblé : {bloom}
-    - Format : JSON uniquement
-    - Champs requis par question : topic, bloom_level, question, answer_a, answer_b, answer_c, answer_d, correct_answer (A/B/C/D), explanation.
-    
-    Réponds EXCLUSIVEMENT avec un tableau JSON valide.
-    """
-    
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
-        # Nettoyage du texte (Gemini peut mettre des backticks markdown)
-        json_text = response.text.replace('```json', '').replace('```', '').strip()
-        generated_questions = json.loads(json_text)
-        
+        generated_questions = _call_gemini_for_questions(context, num, bloom, q_type)
         db = get_db()
         questions_added = 0
         for q in generated_questions:
-            db.execute('''
-                INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question, 
-                                     answer_a, answer_b, answer_c, answer_d, correct_answer, explanation)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (class_id, world_id, 'qcm', 'IA Gemini', q.get('topic'), bloom, q.get('question'), 
-                  q.get('answer_a'), q.get('answer_b'), q.get('answer_c'), q.get('answer_d'), 
-                  q.get('correct_answer', 'A'), q.get('explanation')))
+            _insert_question_row(db, class_id, world_id, q_type, q)
             questions_added += 1
-        
         db.commit()
+        db.close()
         return jsonify({"count": questions_added, "message": "Questions forgées par Gemini"})
     except Exception as e:
         return jsonify({"error": f"Erreur Gemini: {str(e)}"}), 500
 
 
+# --- CHATBOT IA ENDPOINT ---
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_gemini():
+    """
+    Endpoint pour le chatbot IA intégré au jeu.
+    Accepte une question de l'utilisateur et retourne une réponse générée par Gemini.
+    Utilise la base de connaissance pour contextualiser les réponses.
+    """
+    if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        return jsonify({"error": "Chatbot IA non configuré. Veuillez ajouter votre clé API Gemini dans .env"}), 503
+    
+    data = request.json
+    user_query = data.get('query', '').strip()
+    world_id = data.get('world_id')  # Pour contextualiser les réponses
+    student_name = data.get('student_name', 'Aventurier')
+    student_id = data.get('student_id')
+    chat_history = data.get('history', [])
+    game_context = data.get('game_context', {})
+    
+    if not user_query:
+        return jsonify({"error": "Requête vide"}), 400
+    
+    try:
+        conn = get_db()
+        
+        # Charger le contexte du monde (sujet/topic) si disponible
+        world_context = None
+        if world_id:
+            world = conn.execute("SELECT name, subject, topic FROM worlds WHERE id = ?", (world_id,)).fetchone()
+            if world:
+                world_context = dict(world)
+                
+        # Analyser le profil de l'élève si un ID est fourni
+        student_profile = None
+        if student_id:
+            student_profile = get_student_profile(conn, student_id)
+            
+        conn.close()
+        
+        # Construire la base de connaissance pertinente
+        knowledge_context = ""
+        if KNOWLEDGE_BASE:
+            knowledge_context += "\n--- BASE DE CONNAISSANCES ---\n"
+            # On inclut des extraits pertinents de la base de connaissances
+            if 'game_mechanics' in KNOWLEDGE_BASE:
+                knowledge_context += "Mécaniques du jeu :\n"
+                for key, val in list(KNOWLEDGE_BASE['game_mechanics'].items())[:3]:
+                    knowledge_context += f"- {val}\n"
+            if 'pedagogy' in KNOWLEDGE_BASE:
+                knowledge_context += "\nPédagogie :\n"
+                knowledge_context += f"- {KNOWLEDGE_BASE['pedagogy'].get('general_tips', '')}\n"
+            if world_context and 'subjects_tips' in KNOWLEDGE_BASE:
+                subject_key = "math" if "Math" in world_context.get('subject', '') else "french"
+                if subject_key in KNOWLEDGE_BASE['subjects_tips']:
+                    knowledge_context += f"\nAstuces ({subject_key}):\n"
+                    for key, val in list(KNOWLEDGE_BASE['subjects_tips'][subject_key].items())[:2]:
+                        knowledge_context += f"- {val}\n"
+            if 'faq' in KNOWLEDGE_BASE:
+                 knowledge_context += "\nFAQ :\n"
+                 for key, val in list(KNOWLEDGE_BASE['faq'].items())[:2]:
+                     knowledge_context += f"- {val}\n"
+            knowledge_context += "-----------------------------\n\n"
+        
+        # Contexte du jeu en temps réel
+        realtime_context = ""
+        if game_context:
+            realtime_context += "--- ÉTAT DU JEU EN TEMPS RÉEL ---\n"
+            realtime_context += f"- Vies restantes : {game_context.get('lives', 3)}\n"
+            realtime_context += f"- Pièces (🪙) : {game_context.get('coins', 0)}\n"
+            if game_context.get('last_wrong_answer'):
+                 realtime_context += f"- L'élève vient de se tromper sur la question : '{game_context.get('last_wrong_answer')}'\n"
+            realtime_context += "---------------------------------\n\n"
+
+        # Construire le System Prompt via le module
+        system_instructions = build_system_prompt(student_name, world_context, student_profile)
+        
+        # Préparer les messages pour l'API Gemini (Chat)
+        messages = [
+            {"role": "user", "parts": [system_instructions + knowledge_context + realtime_context + "J'ai compris mes instructions."]},
+            {"role": "model", "parts": ["Parfait, je suis prêt ! Que puis-je faire pour toi ?"]}
+        ]
+        
+        # Ajouter l'historique de conversation (les 3 derniers échanges)
+        for msg in chat_history[-6:]:
+            role = "user" if msg.get("sender") == "user" else "model"
+            messages.append({"role": role, "parts": [msg.get("text")]})
+            
+        # Ajouter la question actuelle
+        messages.append({"role": "user", "parts": [user_query]})
+        
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(messages)
+        reply = response.text.strip()
+        
+        return jsonify({
+            "reply": reply,
+            "status": "success"
+        }), 200
+        
+    except Exception as e:
+        print(f"Erreur Gemini chat: {str(e)}")
+        return jsonify({"error": f"Erreur lors de la génération de la réponse: {str(e)}"}), 500
+
+# --- ANALYSE IA DASHBOARD ENDPOINT ---
+
+@app.route('/api/ai/analyze', methods=['GET'])
+def ai_analyze_class():
+    """
+    Endpoint pour le dashboard enseignant.
+    Génère une analyse pédagogique de la classe basée sur les statistiques en base de données.
+    """
+    class_id = request.args.get('class_id')
+    if not class_id:
+        return jsonify({"error": "class_id requis"}), 400
+        
+    if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        return jsonify({"error": "Clé API Gemini non configurée"}), 503
+        
+    try:
+        conn = get_db()
+        
+        # 1. Récupérer les stats globales de la classe
+        stats = conn.execute("""
+            SELECT 
+                COUNT(DISTINCT student_id) as active_students,
+                COUNT(*) as total_answers,
+                SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_answers
+            FROM answers a
+            JOIN students s ON a.student_id = s.id
+            WHERE s.class_id = ?
+        """, (class_id,)).fetchone()
+        
+        if not stats or stats['total_answers'] == 0:
+            return jsonify({"analysis": "Pas assez de données pour analyser cette classe. Demandez aux élèves de jouer !"}), 200
+            
+        success_rate = round((stats['correct_answers'] / stats['total_answers']) * 100)
+        
+        # 2. Récupérer les questions les plus difficiles (Heatmap)
+        hard_questions = conn.execute("""
+            SELECT 
+                q.question, 
+                q.topic,
+                COUNT(*) as attempts,
+                SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as successes
+            FROM answers a
+            JOIN questions q ON a.question_id = q.id
+            JOIN students s ON a.student_id = s.id
+            WHERE s.class_id = ?
+            GROUP BY q.id
+            HAVING attempts >= 2
+            ORDER BY (CAST(successes AS FLOAT) / attempts) ASC
+            LIMIT 5
+        """, (class_id,)).fetchall()
+        
+        conn.close()
+        
+        # Construire le prompt d'analyse
+        context = f"Statistiques de la classe :\n- Élèves actifs: {stats['active_students']}\n- Taux de réussite global: {success_rate}%\n\nQuestions posant le plus de problèmes :\n"
+        for q in hard_questions:
+            rate = round((q['successes'] / q['attempts']) * 100)
+            context += f"- Thème: {q['topic']} | Question: '{q['question']}' | Taux de réussite: {rate}%\n"
+            
+        prompt = f"""Tu es un conseiller pédagogique expert.
+Analyse les statistiques suivantes d'une classe jouant à un jeu éducatif.
+
+{context}
+
+Rédige une courte analyse (en markdown) avec :
+1. Un constat global sur la classe (1-2 phrases)
+2. L'identification des concepts qui bloquent
+3. 2 ou 3 recommandations concrètes pour l'enseignant (ex: sujets à revoir en classe, type d'exercices à proposer)
+
+Sois professionnel mais encourageant."""
+
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        response = model.generate_content(prompt)
+        
+        return jsonify({"analysis": response.text.strip()})
+        
+    except Exception as e:
+        print(f"Erreur Gemini Analyze: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-port', '--port', type=int, default=5001, help='Port to run the server on')
+    args = parser.parse_args()
+    print(f"OK Démarrage du serveur sur le port {args.port}")
+    app.run(host='0.0.0.0', port=args.port, debug=True)

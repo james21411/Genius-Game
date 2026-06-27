@@ -23,10 +23,12 @@ export function initLivreDialog() {
   function closeDialog() {
     overlay.classList.add('hidden');
     window.isLivreActive = false;
+    window.updateMenuVisibility?.();
   }
 
   window.addEventListener('livre-collected', (e) => {
     window.isLivreActive = true;
+    window.updateMenuVisibility?.();
     
     // Fetch details of the upcoming quiz question dynamically
     const info = getNextQuestionHint();
@@ -37,7 +39,7 @@ export function initLivreDialog() {
       }
 
       textContainer.innerHTML = `
-        <strong style="color: #8e44ad; font-size: 24px;">CONSEIL DE L'IA :</strong><br>
+        <strong style="color: #8e44ad; font-size: 24px;">CONSEIL DU GRIMOIRE :</strong><br>
         <span style="color: #666; font-size: 18px; font-style: italic;">Pour la question : "${info.question}"</span><br><br>
         <span style="font-weight: bold; color: #111; font-size: 22px;">💡 Clé pédagogique :</span> ${info.hint}
       `;

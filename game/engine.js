@@ -76,9 +76,18 @@ export function startEngine(canvas, worldRef, playerRef){
   requestAnimationFrame(loop);
 }
 
+let _gameoverUiSynced = false;
+
 function loop(now){
   const rawDt = Math.min(0.032, (now - last) / 1000);
   last = now;
+
+  if (window.gameState === 'gameover' && !_gameoverUiSynced) {
+    _gameoverUiSynced = true;
+    window.updateMenuVisibility?.();
+  } else if (window.gameState !== 'gameover') {
+    _gameoverUiSynced = false;
+  }
 
   // if not playing, only render (keeps canvas interactive for menu/gameover)
   if(window.gameState && window.gameState !== 'playing'){
@@ -93,8 +102,15 @@ function loop(now){
     return;
   }
 
-  // If Book overlay is active, pause the gameplay updates
+  // Reading or answering pauses the world: enemies, projectiles and level timer stay still.
   if(window.isLivreActive){
+    draw();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  if(isQuizActive()){
+    updateQuiz(rawDt);
     draw();
     requestAnimationFrame(loop);
     return;
@@ -103,7 +119,6 @@ function loop(now){
   // Ensure game music is playing when active
   startMusic();
 
-  // Apply quiz time-scale (quasi-pause during active question)
   const dt = rawDt * timeScale();
   updateQuiz(rawDt); // quiz updates at real time
 

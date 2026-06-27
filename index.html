@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Genius Jump</title>
+  <title>Genius Jump EDU</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
   {
@@ -16,7 +19,6 @@
 <body>
   <canvas id="game"></canvas>
 
-  <!-- Quiz overlay (vrais boutons HTML, au-dessus des contrôles tactiles) -->
   <div id="quizOverlay" class="hidden" aria-hidden="true">
     <div class="quiz-panel">
       <div class="quiz-meta">
@@ -31,110 +33,108 @@
         <button type="button" class="quiz-answer-btn quiz-btn-c" data-choice="C"><span>C.</span> <span id="quizLabelC"></span></button>
         <button type="button" class="quiz-answer-btn quiz-btn-d" data-choice="D"><span>D.</span> <span id="quizLabelD"></span></button>
       </div>
-      <p id="quizHint" class="quiz-hint">Touche 1-4 ou clique une réponse</p>
+      <p id="quizHint" class="quiz-hint">Touche 1-4 ou clique une reponse</p>
     </div>
   </div>
 
-  <!-- Full-screen menu overlay (shows when not playing) -->
+  <!-- Menu plein ecran -->
   <div id="menuOverlay" role="dialog">
-    <div class="menu-bg"></div>
-    <div class="menu-panel game-hub" role="menu">
-      <a href="./dashboard/index.html" class="dashboard-link" target="_blank" title="Espace Enseignant">👨‍🏫 Accès Guilde Prof</a>
-      
-      <!-- Student Stats (Pause Menu) -->
-      <div id="menu-xp-display" class="student-stats hidden">
-        <img src="player.png" class="mini-avatar"> 
-        <strong id="pause-student-name">-</strong> | 
-        <img src="coin.png" class="mini-icon"> <strong id="pause-student-xp">0</strong> XP
-      </div>
+    <div class="menu-shell">
 
-      <div class="hub-grid">
-        <!-- Colonne Gauche : Profil -->
-        <div class="hub-col profile-col">
-          <h1 class="menu-title">GENIUS<br>JUMP<br><span class="edu-text">EDU</span></h1>
-          <div class="student-login">
-            <div class="login-box">
-              <label>Nom du Héros</label>
-              <input type="text" id="student-name" placeholder="Ex: Léo" class="menu-input">
+      <!-- Ecran connexion -->
+      <div id="login-screen" class="menu-screen">
+        <div class="login-layout">
+          <div class="login-brand">
+            <div class="login-brand-copy">
+              <span class="login-kicker">Portail eleve</span>
+              <h1>Genius Jump <span>EDU</span></h1>
+              <p>Entre dans ton niveau, choisis ton heros et transforme les questions de classe en aventure.</p>
             </div>
-            <div class="login-box">
-              <label>Code de Classe</label>
-              <div style="display:flex; gap:5px;">
-                <input type="text" id="class-code" placeholder="Ex: ABCD-1234" class="menu-input">
-                <button id="btn-verify-class" class="arcade-btn blue-btn mini-btn" style="padding:5px 10px !important;">VÉRIFIER</button>
-              </div>
+            <div class="login-banner-card" aria-hidden="true">
+              <img src="banner10.png" alt="">
             </div>
           </div>
-          <div class="player-preview" style="display:flex; align-items:center; justify-content:center; gap: 10px;">
-            <button id="prev-char" class="level-arrow" aria-label="Personnage précédent">&#9664;</button>
-            <div style="display:flex; flex-direction:column; align-items:center;">
-              <div id="character-name" style="font-family:'Press Start 2P', monospace; font-size:12px; color:#ffd160; margin-bottom:5px; text-transform:uppercase; text-shadow: 2px 2px 0 #000;">DUTHANT</div>
-              <div id="menu-player-sprite" class="menu-player-sprite"></div>
+          <div class="login-card">
+            <span class="login-card-kicker">Acces aventure</span>
+            <h2>Connexion eleve</h2>
+            <p class="login-card-intro">Utilise ton prenom et le code donne par ton enseignant pour rejoindre ta classe.</p>
+            <div class="field">
+              <label for="student-name">Ton prenom</label>
+              <input type="text" id="student-name" placeholder="Ex : Leo" autocomplete="name">
             </div>
-            <button id="next-char" class="level-arrow" aria-label="Personnage suivant">&#9654;</button>
-          </div>
-        </div>
-
-        <!-- Centre : Sélection Niveau et Modes -->
-        <div class="hub-col center-col">
-          <h2>🎯 QUÊTE DISPONIBLE</h2>
-          <div id="quest-selector-dynamic">
-            <div class="level-selector">
-              <button id="prev-level" class="level-arrow" aria-label="Niveau précédent">&#9664;</button>
-              <span id="level-display" class="level-name">Entrez un code de classe...</span>
-              <button id="next-level" class="level-arrow" aria-label="Niveau suivant">&#9654;</button>
+            <div class="field">
+              <label for="class-code">Code de classe</label>
+              <input type="text" id="class-code" placeholder="Ex : DEMO-2026" autocomplete="off" style="text-transform:uppercase">
+              <span class="field-hint">Le code t'est donne par ton enseignant (majuscules acceptees)</span>
             </div>
-            <div id="world-details" style="font-family:'VT323'; color:#aaa; text-align:center; margin-top:5px; font-size:18px;">
-              Sujet: -
-            </div>
-          </div>
-
-          <h2>⚔️ MODE DE JEU</h2>
-          <div class="mode-selector">
-            <label class="mode-card">
-              <input type="radio" name="gameMode" value="lesson" checked>
-              <div class="mode-content">
-                <h3>📘 Leçon</h3>
-                <p>Apprends avec des explications (Recommandé)</p>
-              </div>
-            </label>
-            <label class="mode-card">
-              <input type="radio" name="gameMode" value="eval">
-              <div class="mode-content">
-                <h3>🔥 Évaluation</h3>
-                <p>Temps limité, 1 seul essai, punitif !</p>
-              </div>
-            </label>
-            <label class="mode-card">
-              <input type="radio" name="gameMode" value="free">
-              <div class="mode-content">
-                <h3>🌍 Monde Ouvert</h3>
-                <p>Aucun quiz, exploration libre.</p>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <!-- Droite : Actions -->
-        <div class="hub-col actions-col">
-          <button id="menu-resume" class="arcade-btn green-btn hidden">REPRENDRE</button>
-          <button id="menu-play" class="arcade-btn green-btn main-play-btn">JOUER ▶</button>
-          
-          <div class="dummy-buttons">
-            <button class="arcade-btn blue-btn dummy-btn" data-feature="Inventaire">🎒 Inventaire</button>
-            <button class="arcade-btn gold-btn dummy-btn" data-feature="Boutique">🛒 Boutique</button>
-            <button class="arcade-btn purple-btn dummy-btn" data-feature="Classement">🏆 Classement</button>
-            <button id="menu-options" class="arcade-btn grey-btn">⚙️ Options</button>
-            <button id="menu-quit" class="arcade-btn grey-btn">🚪 Quitter</button>
+            <p id="login-error" class="login-error hidden"></p>
+            <button type="button" id="btn-verify-class" class="btn-primary btn-large">Se connecter</button>
+            <a href="./dashboard/index.html" class="link-prof" target="_blank">Espace enseignant</a>
           </div>
         </div>
       </div>
-      
-      <div class="menu-foot">Flèches ◀▶ pour choisir le niveau • Espace pour sauter/tirer</div>
+
+      <!-- Ecran hub (apres connexion) -->
+      <div id="hub-screen" class="menu-screen hidden">
+        <div class="hub-banner" aria-hidden="true"></div>
+        <header class="hub-header">
+          <div class="hub-header-left">
+            <h1>Genius Jump <span>EDU</span></h1>
+            <p id="hub-welcome">Bienvenue</p>
+          </div>
+          <div class="hub-header-right">
+            <div class="hub-badge">
+              <span class="hub-badge-label">Classe</span>
+              <strong id="profile-class-code">-</strong>
+            </div>
+            <button type="button" id="btn-change-profile" class="btn-ghost">Changer de compte</button>
+            <a href="./dashboard/index.html" class="btn-ghost" target="_blank">Espace prof</a>
+          </div>
+        </header>
+
+        <div id="menu-xp-display" class="pause-stats hidden">
+          <span id="pause-student-name">-</span> · <span id="pause-student-xp">0</span> XP
+        </div>
+
+        <main class="hub-main">
+          <section class="hub-section hub-activities">
+            <div class="section-head">
+              <h2>Activites</h2>
+              <p id="activities-hint">Selectionne une activite configuree par ton enseignant.</p>
+            </div>
+            <div id="activities-list" class="activities-grid"></div>
+            <div id="selected-activity-info" class="activity-selected hidden">
+              <span id="activity-mode-badge" class="mode-pill">LECON</span>
+              <p id="activity-detail-text">-</p>
+            </div>
+          </section>
+
+          <aside class="hub-section hub-sidebar">
+            <div class="section-head">
+              <h2>Personnage</h2>
+              <p id="character-hint">Choisis ton heros</p>
+            </div>
+            <div id="character-section" class="character-picker">
+              <button type="button" id="prev-char" class="char-nav" aria-label="Precedent">&#9664;</button>
+              <div class="char-display">
+                <div id="menu-player-sprite" class="menu-player-sprite"></div>
+                <p id="character-name" class="char-name">Duthant</p>
+              </div>
+              <button type="button" id="next-char" class="char-nav" aria-label="Suivant">&#9654;</button>
+            </div>
+
+            <div class="hub-actions">
+              <button type="button" id="menu-resume" class="btn-secondary btn-large hidden">Reprendre</button>
+              <button type="button" id="menu-play" class="btn-primary btn-large btn-play" disabled>Jouer</button>
+              <button type="button" id="menu-quit" class="btn-ghost">Quitter la partie</button>
+            </div>
+          </aside>
+        </main>
+      </div>
+
     </div>
   </div>
 
-  <!-- On-screen controls container (mobile) -->
   <div id="controls">
     <div id="joy"></div>
     <button id="jump" aria-label="Saut">▲</button>
@@ -142,67 +142,60 @@
     <button id="pauseBtn" aria-label="Pause">⏸</button>
   </div>
 
-  <!-- Modal d'indices du Livre -->
   <div id="livreOverlay" class="hidden">
     <div class="livre-content">
       <div class="livre-header">
-        <span class="livre-title">📖 GRIMOIRE DE CONNAISSANCES</span>
+        <span class="livre-title">Grimoire de connaissances</span>
         <button id="livreCloseBtn" class="livre-close-btn">&times;</button>
       </div>
       <div class="livre-body">
         <img src="livre1.jpeg" class="livre-large-img" alt="Livre">
         <div class="livre-text-box">
-          <p id="livreText">Chargement des explications et indices de l'IA...</p>
+          <p id="livreText">Chargement...</p>
         </div>
       </div>
       <div class="livre-footer">
-        <button id="livreReadBtn" class="arcade-btn green-btn">J'AI COMPRIS !</button>
+        <button id="livreReadBtn" class="arcade-btn green-btn">J'ai compris</button>
       </div>
     </div>
   </div>
 
-  <!-- Bouton Historique des Indices -->
-  <button id="bookHistoryToggle" aria-label="Index des Livres" class="history-toggle-btn">
-    <img src="livre1.jpeg" alt="Grimoire" style="width:28px; height:28px; object-fit:cover; border-radius:3px; image-rendering:pixelated;">
+  <button id="bookHistoryToggle" aria-label="Grimoires" class="history-toggle-btn">
+    <img src="livre1.jpeg" alt="Grimoire" style="width:28px;height:28px;object-fit:cover;border-radius:3px;">
   </button>
 
-  <!-- Panel Historique des Indices (Grimoires) -->
   <div id="bookHistoryPanel" class="history-panel hidden">
     <div class="history-header">
-      <span class="history-title">📚 INDEX DES GRIMOIRES</span>
+      <span class="history-title">Index des grimoires</span>
       <button id="bookHistoryClose" class="history-close-btn">&times;</button>
     </div>
     <div id="bookHistoryList" class="history-list">
-      <div class="history-empty-state">Aucun grimoire collecté. Explore les niveaux pour trouver des indices !</div>
+      <div class="history-empty-state">Aucun grimoire collecte.</div>
     </div>
   </div>
 
-  <!-- Chatbot IA (Thème Retro Arcade) -->
-  <button id="chatbotToggle" aria-label="Ouvrir le Chatbot IA" class="chatbot-toggle-btn">
-    <img src="chatbot.jpeg" alt="Chatbot IA" style="width:28px; height:28px; object-fit:cover; border-radius:3px; image-rendering:pixelated;">
+  <button id="chatbotToggle" aria-label="Chatbot" class="chatbot-toggle-btn">
+    <img src="chatbot.jpeg" alt="Chatbot" style="width:28px;height:28px;object-fit:cover;border-radius:3px;">
   </button>
 
   <div id="chatbotPanel" class="chatbot-panel hidden">
     <div class="chatbot-header">
-      <span class="chatbot-title">👾 COMPAGNON GENIUS</span>
+      <span class="chatbot-title">Compagnon Genius</span>
       <button id="chatbotClose" class="chatbot-close-btn">&times;</button>
     </div>
-    
     <div class="chatbot-shop-bar">
-      <span id="chatbotQueriesCount">💬 1 Question</span>
-      <button id="btnBuyQuery" class="chatbot-buy-btn">🛒 +1 Question (5 🪙)</button>
+      <span id="chatbotQueriesCount">1 question</span>
+      <button id="btnBuyQuery" class="chatbot-buy-btn">+1 question (5 pieces)</button>
     </div>
-
     <div id="chatbotMessages" class="chatbot-messages">
       <div class="chat-message bot">
-        <div class="chat-sender">BOT</div>
-        <div class="chat-bubble">Salut Héros ! Collecte 5 pièces d'or (🪙) et achète-moi des requêtes pour me poser des questions sur tes devoirs ou le jeu !</div>
+        <div class="chat-sender">GUIDE</div>
+        <div class="chat-bubble">Salut ! Collecte des pieces pour me poser des questions.</div>
       </div>
     </div>
-
     <form id="chatbotForm" class="chatbot-input-area">
       <input type="text" id="chatbotInput" placeholder="Pose-moi une question..." autocomplete="off" class="chatbot-input" required>
-      <button type="submit" id="chatbotSend" class="chatbot-send-btn">POSER</button>
+      <button type="submit" id="chatbotSend" class="chatbot-send-btn">Envoyer</button>
     </form>
   </div>
 

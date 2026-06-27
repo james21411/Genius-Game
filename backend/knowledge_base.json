@@ -1,0 +1,49 @@
+{
+  "identity": {
+    "who_are_you": "Je suis GeniusBot 🤖, une intelligence artificielle conçue pour être ton mentor et ton guide dans le monde de Genius Jump EDU.",
+    "mission": "Ma mission est de t'aider à progresser, à comprendre les concepts que tu rencontres, et à surmonter les obstacles sans jamais faire le travail à ta place.",
+    "lore": "J'ai été créé par les Grands Maîtres (tes enseignants) pour t'accompagner dans les différents mondes de la connaissance."
+  },
+  "game_mechanics": {
+    "controls": "Utilise les flèches pour te déplacer, ESPACE ou la flèche HAUT pour sauter, et CTRL (ou le bouton de tir) pour lancer des projectiles. Tu peux faire des doubles sauts en appuyant deux fois sur saut !",
+    "coins_and_shop": "Les pièces (🪙) sont cruciales ! Elles te permettent d'acheter plus de requêtes IA (5 pièces = 1 question supplémentaire) ou de débloquer des bonus.",
+    "lives_and_health": "Tu commences généralement avec 3 vies. Si tu tombes dans le vide ou si tu touches un ennemi invincible (scie, pique, feu), tu perds une vie. Si tu perds toutes tes vies, c'est Game Over et tu devras recommencer l'aventure.",
+    "quiz_platforms": "Les plateformes dorées avec un '?' déclenchent un quiz éducatif. En mode Leçon, tu as plusieurs tentatives et tu ne perds pas de vie si tu te trompes. En mode Évaluation, chaque erreur te coûte une vie !",
+    "enemies": "Il y a plusieurs types d'ennemis. Certains marchent (walk), d'autres volent (fly), certains sautent (les ninjas). Tu peux éliminer la plupart d'entre eux en leur tirant dessus ou en leur sautant sur la tête. Attention, les boss nécessitent plusieurs tirs !",
+    "invincible_hazards": "Les scies circulaires, les têtes à piques et les feux sont invincibles. Ne gaspille pas tes munitions dessus, il faut juste les éviter avec un bon timing de saut.",
+    "books_and_knowledge": "Tu croiseras parfois des éléments magiques (fragments, cristaux, PNJ, portes). En t'en approchant et en résolvant leur mini-défi, tu débloqueras des 'Grimoires de connaissance'. Ils contiennent de précieux indices pour les futurs quiz !"
+  },
+  "pedagogy": {
+    "bloom_levels": {
+      "knowledge": "La mémorisation (rappeler des faits). Si tu as du mal, essaie de faire des fiches de révision simples ou des flashcards.",
+      "comprehension": "La compréhension (expliquer avec tes mots). N'apprends pas par cœur, essaie de m'expliquer le concept comme si j'étais un enfant de 5 ans.",
+      "application": "L'application (utiliser dans une nouvelle situation). La meilleure façon d'apprendre est de s'entraîner avec des exercices variés.",
+      "analysis": "L'analyse (décomposer et comprendre les liens). Quand un problème est complexe, découpe-le en petites étapes plus faciles à résoudre."
+    },
+    "general_tips": "L'erreur est le chemin vers la réussite. Ne te décourage jamais après une mauvaise réponse. Lis bien l'explication, prends une grande inspiration, et réessaie."
+  },
+  "subjects_tips": {
+    "math": {
+      "tables": "Pour les tables de multiplication, cherche les astuces : la table de 9, la somme des chiffres fait toujours 9. Pour la table de 4, c'est le double du double !",
+      "fractions": "Imagine toujours une pizza ou un gâteau. Le chiffre du bas (dénominateur) dit en combien de parts on coupe, le chiffre du haut (numérateur) dit combien de parts tu manges.",
+      "geometry": "Pense aux formes de la vie de tous les jours. Un rectangle c'est une porte, un cercle c'est une roue, un triangle c'est un toit."
+    },
+    "french": {
+      "grammar": "Le nom est le roi de la phrase (qui ou quoi), le verbe est le moteur (l'action), et l'adjectif est son costume (comment il est).",
+      "conjugation": "Identifie toujours le groupe du verbe (-er, -ir, -re) et le temps (passé, présent, futur) avant de choisir ta terminaison."
+    },
+    "science": {
+      "biology": "Ton corps est comme une machine incroyable. Le cœur est la pompe, les poumons sont les filtres, le cerveau est l'ordinateur.",
+      "nature": "La photosynthèse est magique : les plantes mangent de la lumière, de l'eau et du gaz carbonique pour recracher de l'oxygène propre pour nous !"
+    }
+  },
+  "adaptive_tips": {
+    "low_success_rate": "Je vois que tu rencontres quelques difficultés sur ce sujet, mais c'est totalement normal ! Chaque expert a d'abord été un débutant. Prends ton temps, lis bien la question à haute voix.",
+    "recent_mistakes": "Tu as fait quelques erreurs récemment sur ce type de question. C'est le moment idéal pour faire une petite pause ou relire calmement les indices que je t'ai donnés."
+  },
+  "faq": {
+    "comment_avoir_des_pieces": "Cherche les pièces qui flottent dans les niveaux. Parfois, battre un ennemi te donne aussi des munitions. Fais attention, certaines pièces sont cachées dans des endroits difficiles d'accès !",
+    "comment_battre_le_boss": "Les boss tirent souvent des projectiles en éventail. Garde tes distances, saute par-dessus ses tirs, et mitraille-le quand tu as une ouverture. Et surtout, réponds juste au quiz qu'il lance pour lui faire énormément de dégâts !",
+    "pourquoi_j_ai_perdu_une_vie": "Tu perds une vie si tu tombes dans un trou, si tu touches un ennemi invincible (scie, pique, feu), si un projectile ennemi te touche, ou si tu te trompes lors d'un quiz en mode Évaluation."
+  }
+}
