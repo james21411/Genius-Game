@@ -70,12 +70,30 @@
       </div>
 
       <nav class="sidebar-menu">
-        <a href="#" class="menu-item active" data-tab="dashboard">Tableau de bord</a>
-        <a href="#" class="menu-item" data-tab="classes">Classes</a>
-        <a href="#" class="menu-item" data-tab="lessons">Lecons</a>
-        <a href="#" class="menu-item" data-tab="evaluations">Evaluations</a>
-        <a href="#" class="menu-item" data-tab="questions">Questions</a>
-        <a href="#" class="menu-item" data-tab="results">Resultats</a>
+        <a href="#" class="menu-item active" data-tab="dashboard">
+          <img class="menu-icon-img" src="../icones/boar.png" alt="" aria-hidden="true">
+          <span class="menu-label">Tableau de bord</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="classes">
+          <img class="menu-icon-img" src="../icones/classe.png" alt="" aria-hidden="true">
+          <span class="menu-label">Classes</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="lessons">
+          <img class="menu-icon-img" src="../icones/session.png" alt="" aria-hidden="true">
+          <span class="menu-label">Lecons</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="evaluations">
+          <img class="menu-icon-img" src="../icones/evaluation.png" alt="" aria-hidden="true">
+          <span class="menu-label">Evaluations</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="questions">
+          <img class="menu-icon-img" src="../icones/question.png" alt="" aria-hidden="true">
+          <span class="menu-label">Questions</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="results">
+          <img class="menu-icon-img" src="../icones/resultat.png" alt="" aria-hidden="true">
+          <span class="menu-label">Resultats</span>
+        </a>
       </nav>
 
       <div class="sidebar-user">
@@ -110,23 +128,41 @@
       </header>
 
       <section id="panel-dashboard" class="tab-panel">
+        <div class="dashboard-filter-bar">
+          <label for="dashboard-mode-filter">Filtre analyse</label>
+          <select id="dashboard-mode-filter" class="form-select">
+            <option value="all">Toutes les activites</option>
+            <option value="lesson">Lecons</option>
+            <option value="eval">Evaluations</option>
+          </select>
+          <select id="dashboard-world-filter" class="form-select">
+            <option value="">Toutes</option>
+          </select>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-icon bg-blue">E</div>
+            <div class="stat-icon">
+              <img src="../icones/groupe_eleves.png" alt="" aria-hidden="true">
+            </div>
             <div class="stat-details">
               <h4 id="stat-active">0</h4>
               <p>Eleves actifs</p>
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon bg-green">%</div>
+            <div class="stat-icon">
+              <img src="../icones/resultat.png" alt="" aria-hidden="true">
+            </div>
             <div class="stat-details">
               <h4 id="stat-avg">0%</h4>
               <p>Taux moyen</p>
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon bg-purple">Q</div>
+            <div class="stat-icon">
+              <img src="../icones/session.png" alt="" aria-hidden="true">
+            </div>
             <div class="stat-details">
               <h4 id="stat-sessions">0</h4>
               <p>Sessions</p>
@@ -134,9 +170,19 @@
           </div>
         </div>
 
-        <div class="dashboard-row">
-          <div class="card flex-1">
-            <div class="card-header"><h3>Classement XP</h3></div>
+        <div class="dashboard-analytics">
+          <div class="card analytics-card">
+            <div class="card-header">
+              <h3><img class="title-icon-img" src="../icones/evaluation.png" alt="" aria-hidden="true">Radar des competences</h3>
+            </div>
+            <div class="card-body">
+              <div id="stats-radar-chart" class="radar-chart"></div>
+            </div>
+          </div>
+          <div class="card analytics-card">
+            <div class="card-header">
+              <h3><img class="title-icon-img" src="../icones/classement.png" alt="" aria-hidden="true">Classement XP</h3>
+            </div>
             <div class="card-body scrollable">
               <table class="data-table">
                 <thead>
@@ -148,8 +194,21 @@
               </table>
             </div>
           </div>
+        </div>
+
+        <div class="dashboard-row">
           <div class="card flex-1">
-            <div class="card-header"><h3>Questions difficiles</h3></div>
+            <div class="card-header">
+              <h3><img class="title-icon-img" src="../icones/classement.png" alt="" aria-hidden="true">Progression XP</h3>
+            </div>
+            <div class="card-body">
+              <div id="stats-bar-chart" class="bar-chart"></div>
+            </div>
+          </div>
+          <div class="card flex-1">
+            <div class="card-header">
+              <h3><img class="title-icon-img" src="../icones/question.png" alt="" aria-hidden="true">Questions difficiles</h3>
+            </div>
             <div class="card-body scrollable">
               <table class="data-table">
                 <thead>

@@ -72,6 +72,7 @@ async function showApp() {
   initAiGeneratorModal();
   initLessonFragments();
   initLessonAiModal();
+  initDashboardFilters();
   await fetchClasses();
 }
 
@@ -127,7 +128,7 @@ function initSidebar() {
       
       // Refresh logic per tab
       if (tab === 'dashboard') {
-        fetchStats();
+        loadDashboardWorldFilter().then(fetchStats);
       } else if (tab === 'classes') {
         fetchClassesList();
       } else if (tab === 'lessons') {
@@ -143,6 +144,45 @@ function initSidebar() {
       }
     });
   });
+}
+
+function initDashboardFilters() {
+  const modeFilter = document.getElementById('dashboard-mode-filter');
+  const worldFilter = document.getElementById('dashboard-world-filter');
+  if (!modeFilter || !worldFilter || modeFilter.dataset.ready) return;
+  modeFilter.dataset.ready = '1';
+  modeFilter.addEventListener('change', async () => {
+    await loadDashboardWorldFilter();
+    fetchStats();
+  });
+  worldFilter.addEventListener('change', fetchStats);
+}
+
+async function loadDashboardWorldFilter() {
+  const modeFilter = document.getElementById('dashboard-mode-filter');
+  const worldFilter = document.getElementById('dashboard-world-filter');
+  if (!currentClassId || !modeFilter || !worldFilter) return;
+
+  const mode = modeFilter.value;
+  if (mode === 'all') {
+    worldFilter.innerHTML = '<option value="">Toutes les activites</option>';
+    worldFilter.disabled = true;
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
+    const worlds = (await res.json()).filter(w => w.mode === mode);
+    const label = mode === 'lesson' ? 'Toutes les lecons' : 'Toutes les evaluations';
+    worldFilter.disabled = false;
+    worldFilter.innerHTML = `<option value="">${label}</option>` + worlds.map(w => (
+      `<option value="${w.id}">${escapeHtml(w.name)} — ${escapeHtml(w.topic)}</option>`
+    )).join('');
+  } catch (err) {
+    console.error(err);
+    worldFilter.innerHTML = '<option value="">Filtre indisponible</option>';
+    worldFilter.disabled = true;
+  }
 }
 
 // --- Auth Actions ---
@@ -222,7 +262,7 @@ async function fetchClasses() {
       if (!currentClassId) currentClassId = classes[0].id;
       classSelect.value = currentClassId;
       updateClassDisplay();
-      if (activeTab === 'dashboard') fetchStats();
+      if (activeTab === 'dashboard') { await loadDashboardWorldFilter(); fetchStats(); }
       else if (activeTab === 'classes') fetchClassesList();
       else if (activeTab === 'lessons') { fetchWorldsList('lesson'); fetchLessonWorldDropdowns(); }
       else if (activeTab === 'evaluations') fetchWorldsList('eval');
@@ -238,7 +278,7 @@ classSelect.onchange = (e) => {
   currentClassId = e.target.value;
   updateClassDisplay();
   
-  if (activeTab === 'dashboard') fetchStats();
+  if (activeTab === 'dashboard') { loadDashboardWorldFilter().then(fetchStats); }
   else if (activeTab === 'classes') fetchClassesList();
   else if (activeTab === 'lessons') { fetchWorldsList('lesson'); fetchLessonWorldDropdowns(); }
   else if (activeTab === 'evaluations') fetchWorldsList('eval');
@@ -641,22 +681,121 @@ function renderLessonAiPreview() {
   const count = document.getElementById('lesson-ai-preview-count');
   if (count) count.textContent = lessonAiPreview.length;
   if (!list) return;
-  list.innerHTML = lessonAiPreview.map((f, idx) => `
+  list.innerHTML = lessonAiPreview.map((f, idx) => {
+    const question = f.question || {};
+    return `
     <article class="ai-preview-card lesson-preview-card">
-      <div class="ai-preview-badge">Fragment ${idx + 1} • ${escapeHtml(f.bloom_level || 'comprehension')}</div>
-      <h4>${escapeHtml(f.title || `Fragment ${idx + 1}`)}</h4>
-      <p>${escapeHtml(f.content || '')}</p>
-      ${f.image_data ? `<div class="lesson-image-suggestion">${escapeHtml(f.image_data)}</div>` : ''}
-      <div class="ai-preview-answers">
-        <strong>Question :</strong> ${escapeHtml(f.question?.question || '')}<br>
-        A. ${escapeHtml(f.question?.answer_a || '')}<br>
-        B. ${escapeHtml(f.question?.answer_b || '')}<br>
-        C. ${escapeHtml(f.question?.answer_c || '')}<br>
-        D. ${escapeHtml(f.question?.answer_d || '')}<br>
-        <strong>Bonne reponse :</strong> ${escapeHtml(f.question?.correct_answer || 'A')}
+      <div class="ai-preview-card-header">
+        <span class="ai-preview-badge">Fragment ${idx + 1} • ${escapeHtml(f.bloom_level || 'comprehension')}</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-lesson-preview-edit="${idx}">Modifier</button>
+      </div>
+      <div class="lesson-preview-display">
+        <h4>${escapeHtml(f.title || `Fragment ${idx + 1}`)}</h4>
+        <p>${escapeHtml(f.content || '')}</p>
+        ${f.image_data ? `<div class="lesson-image-suggestion">${escapeHtml(f.image_data)}</div>` : ''}
+        <div class="ai-preview-answers">
+          <strong>Question :</strong> ${escapeHtml(question.question || '')}<br>
+          A. ${escapeHtml(question.answer_a || '')}<br>
+          B. ${escapeHtml(question.answer_b || '')}<br>
+          C. ${escapeHtml(question.answer_c || '')}<br>
+          D. ${escapeHtml(question.answer_d || '')}<br>
+          <strong>Bonne reponse :</strong> ${escapeHtml(question.correct_answer || 'A')}
+        </div>
+      </div>
+      <div class="lesson-preview-edit hidden" data-lesson-preview-form="${idx}">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>Titre</label>
+            <input type="text" data-field="title" value="${escapeHtml(f.title || '')}">
+          </div>
+          <div class="form-group flex-1">
+            <label>Niveau Bloom</label>
+            <select data-field="bloom_level">
+              ${BLOOM_LEVELS.map(b => `<option value="${b.key}" ${b.key === (f.bloom_level || 'comprehension') ? 'selected' : ''}>${b.label}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Paragraphe</label>
+          <textarea rows="4" data-field="content">${escapeHtml(f.content || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Image ou indication visuelle</label>
+          <input type="text" data-field="image_data" value="${escapeHtml(f.image_data || '')}">
+        </div>
+        <div class="type-container">
+          <h4 class="ai-section-title">Question de verification</h4>
+          <div class="form-group">
+            <label>Enonce</label>
+            <textarea rows="2" data-question-field="question">${escapeHtml(question.question || '')}</textarea>
+          </div>
+          <div class="answers-grid">
+            <div class="form-group"><label>A</label><input type="text" data-question-field="answer_a" value="${escapeHtml(question.answer_a || '')}"></div>
+            <div class="form-group"><label>B</label><input type="text" data-question-field="answer_b" value="${escapeHtml(question.answer_b || '')}"></div>
+            <div class="form-group"><label>C</label><input type="text" data-question-field="answer_c" value="${escapeHtml(question.answer_c || '')}"></div>
+            <div class="form-group"><label>D</label><input type="text" data-question-field="answer_d" value="${escapeHtml(question.answer_d || '')}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Bonne reponse</label>
+              <select data-question-field="correct_answer">
+                ${['A','B','C','D'].map(letter => `<option value="${letter}" ${letter === (question.correct_answer || 'A') ? 'selected' : ''}>${letter}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label>Temps</label>
+              <input type="number" min="10" max="120" data-question-field="time_limit" value="${question.time_limit || 20}">
+            </div>
+            <div class="form-group flex-1">
+              <label>XP</label>
+              <input type="number" min="10" max="300" data-question-field="xp_reward" value="${question.xp_reward || 50}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Explication</label>
+            <textarea rows="2" data-question-field="explanation">${escapeHtml(question.explanation || '')}</textarea>
+          </div>
+        </div>
+        <div class="question-actions">
+          <button type="button" class="btn btn-success btn-sm" data-lesson-preview-save="${idx}">Appliquer</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-lesson-preview-cancel="${idx}">Annuler</button>
+        </div>
       </div>
     </article>
-  `).join('');
+  `;
+  }).join('');
+
+  list.querySelectorAll('[data-lesson-preview-edit]').forEach(btn => {
+    btn.addEventListener('click', () => toggleLessonPreviewEdit(parseInt(btn.dataset.lessonPreviewEdit), true));
+  });
+  list.querySelectorAll('[data-lesson-preview-cancel]').forEach(btn => {
+    btn.addEventListener('click', () => toggleLessonPreviewEdit(parseInt(btn.dataset.lessonPreviewCancel), false));
+  });
+  list.querySelectorAll('[data-lesson-preview-save]').forEach(btn => {
+    btn.addEventListener('click', () => applyLessonPreviewEdit(parseInt(btn.dataset.lessonPreviewSave)));
+  });
+}
+
+function toggleLessonPreviewEdit(idx, editing) {
+  const card = document.querySelector(`[data-lesson-preview-form="${idx}"]`)?.closest('.lesson-preview-card');
+  if (!card) return;
+  card.querySelector('.lesson-preview-display')?.classList.toggle('hidden', editing);
+  card.querySelector(`[data-lesson-preview-form="${idx}"]`)?.classList.toggle('hidden', !editing);
+}
+
+function applyLessonPreviewEdit(idx) {
+  const form = document.querySelector(`[data-lesson-preview-form="${idx}"]`);
+  if (!form || !lessonAiPreview[idx]) return;
+  const fragment = lessonAiPreview[idx];
+  form.querySelectorAll('[data-field]').forEach(input => {
+    fragment[input.dataset.field] = input.value;
+  });
+  fragment.question = fragment.question || {};
+  form.querySelectorAll('[data-question-field]').forEach(input => {
+    const field = input.dataset.questionField;
+    fragment.question[field] = ['time_limit', 'xp_reward'].includes(field) ? (parseInt(input.value) || 0) : input.value;
+  });
+  renderLessonAiPreview();
 }
 
 async function generateLessonFragmentsPreview() {
@@ -808,6 +947,7 @@ function initQuestionBuilder() {
   document.getElementById('btn-add-matching')?.addEventListener('click', () => addMatchingPairRow());
   document.getElementById('btn-add-ddi-slot')?.addEventListener('click', () => addDdiSlotRow());
   document.getElementById('btn-add-mw')?.addEventListener('click', () => addMissingWordRow());
+  document.getElementById('q-world')?.addEventListener('change', fetchQuestionsList);
 
   const ddiImage = document.getElementById('q-ddi-image');
   const ddiCustomWrap = document.getElementById('q-ddi-custom-wrap');
@@ -822,12 +962,12 @@ async function fetchWorldsDropdown() {
   if (!currentClassId) return;
   try {
     const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
-    const worlds = await res.json();
+    const worlds = (await res.json()).filter(w => w.mode === 'eval');
     const dropdown = document.getElementById('q-world');
     dropdown.innerHTML = worlds.map(w => {
-      const label = w.mode === 'eval' ? 'Eval' : 'Lecon';
-      return `<option value="${w.id}">[${label}] ${w.name} — ${w.topic}</option>`;
-    }).join('') || '<option value="">Creer une activite d\'abord</option>';
+      return `<option value="${w.id}">[Eval] ${w.name} — ${w.topic}</option>`;
+    }).join('') || '<option value="">Creer une evaluation d\'abord</option>';
+    await fetchQuestionsList();
   } catch (err) { console.error(err); }
 }
 
@@ -985,11 +1125,16 @@ document.getElementById('btn-reset-question').onclick = resetQuestionForm;
 async function fetchQuestionsList() {
   if (!currentClassId) return;
   try {
+    const selectedWorldId = document.getElementById('q-world')?.value || '';
     const res = await fetch(`${API}/questions?class_id=${currentClassId}`);
-    const questions = await res.json();
+    const questions = (await res.json()).filter(q => selectedWorldId && String(q.world_id) === String(selectedWorldId));
     document.getElementById('q-count').textContent = questions.length;
 
     const tbody = document.getElementById('questions-list-body');
+    if (!selectedWorldId) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center">Selectionnez ou creez une evaluation.</td></tr>`;
+      return;
+    }
     tbody.innerHTML = questions.map(q => `
       <tr>
         <td style="max-width:300px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${q.question}</td>
@@ -1186,7 +1331,12 @@ document.getElementById('btn-export').onclick = async () => {
 async function fetchStats() {
   if (!currentClassId) return;
   try {
-    const res = await fetch(`${API}/stats?class_id=${currentClassId}`);
+    const mode = document.getElementById('dashboard-mode-filter')?.value || 'all';
+    const worldId = document.getElementById('dashboard-world-filter')?.value || '';
+    const query = new URLSearchParams({ class_id: currentClassId });
+    if (mode !== 'all') query.set('mode', mode);
+    if (worldId) query.set('world_id', worldId);
+    const res = await fetch(`${API}/stats?${query.toString()}`);
     if (res.ok) {
       const data = await res.json();
       renderDashboard(data);
@@ -1199,6 +1349,7 @@ function renderDashboard(data) {
   document.getElementById('stat-active').textContent = summary.active_students || 0;
   document.getElementById('stat-avg').textContent = (summary.class_avg || 0) + '%';
   document.getElementById('stat-sessions').textContent = students.length;
+  renderStatsCharts(students || [], heatmap || [], summary || {});
 
   // Render Dashboard table row
   const tbodyStud = document.getElementById('dashboard-students-body');
@@ -1243,6 +1394,85 @@ function renderDashboard(data) {
       </tr>
     `).join('') || `<tr><td colspan="4" class="text-center">Aucun élève enregistré.</td></tr>`;
   }
+}
+
+function renderStatsCharts(students, heatmap, summary) {
+  renderXpBarChart(students);
+  renderRadarChart(heatmap, summary);
+}
+
+function renderXpBarChart(students) {
+  const chart = document.getElementById('stats-bar-chart');
+  if (!chart) return;
+  const topStudents = [...students]
+    .sort((a, b) => (b.xp || 0) - (a.xp || 0))
+    .slice(0, 8);
+  const maxXp = Math.max(...topStudents.map(s => s.xp || 0), 1);
+
+  chart.innerHTML = topStudents.map((s, idx) => {
+    const height = Math.max(8, Math.round(((s.xp || 0) / maxXp) * 100));
+    return `
+      <div class="bar-chart-item" title="${escapeHtml(s.name)} - ${s.xp || 0} XP">
+        <div class="bar-chart-value">${s.xp || 0}</div>
+        <div class="bar-chart-track">
+          <div class="bar-chart-fill rank-${idx + 1}" style="height:${height}%"></div>
+        </div>
+        <div class="bar-chart-label">${escapeHtml((s.name || '?').slice(0, 9))}</div>
+      </div>
+    `;
+  }).join('') || '<div class="chart-empty">Aucun XP a afficher.</div>';
+}
+
+function renderRadarChart(heatmap, summary) {
+  const chart = document.getElementById('stats-radar-chart');
+  if (!chart) return;
+  const baseAvg = Number(summary.class_avg || 0);
+  const groups = [
+    { key: 'memorisation', label: 'Memo', score: baseAvg },
+    { key: 'comprehension', label: 'Compr.', score: baseAvg },
+    { key: 'application', label: 'Appli.', score: baseAvg },
+    { key: 'analyse', label: 'Analyse', score: baseAvg },
+    { key: 'evaluation', label: 'Eval.', score: baseAvg },
+  ];
+
+  heatmap.forEach((q, idx) => {
+    const group = groups[idx % groups.length];
+    group.score = Math.round(((group.score || 0) + Number(q.success_rate || 0)) / 2);
+  });
+
+  const cx = 120;
+  const cy = 112;
+  const maxR = 76;
+  const points = groups.map((g, idx) => {
+    const angle = (-90 + idx * (360 / groups.length)) * Math.PI / 180;
+    const r = Math.max(8, Math.min(100, g.score || 0)) / 100 * maxR;
+    return `${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r}`;
+  }).join(' ');
+
+  const axes = groups.map((g, idx) => {
+    const angle = (-90 + idx * (360 / groups.length)) * Math.PI / 180;
+    const x = cx + Math.cos(angle) * maxR;
+    const y = cy + Math.sin(angle) * maxR;
+    const lx = cx + Math.cos(angle) * (maxR + 24);
+    const ly = cy + Math.sin(angle) * (maxR + 24);
+    return `
+      <line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="radar-axis"></line>
+      <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" class="radar-label">${g.label}</text>
+    `;
+  }).join('');
+
+  chart.innerHTML = `
+    <svg viewBox="0 0 240 230" role="img" aria-label="Radar des competences">
+      <polygon points="120,36 192,89 164,174 76,174 48,89" class="radar-grid"></polygon>
+      <polygon points="120,61 168,96 150,153 90,153 72,96" class="radar-grid radar-grid-inner"></polygon>
+      ${axes}
+      <polygon points="${points}" class="radar-area"></polygon>
+      ${groups.map((g, idx) => {
+        const [x, y] = points.split(' ')[idx].split(',');
+        return `<circle cx="${x}" cy="${y}" r="4" class="radar-dot"><title>${g.label}: ${Math.round(g.score || 0)}%</title></circle>`;
+      }).join('')}
+    </svg>
+  `;
 }
 
 // Auto-refresh statistics every 15 seconds
@@ -1312,13 +1542,12 @@ async function loadAiModalWorlds() {
   if (!currentClassId) return;
   try {
     const res = await fetch(`${API}/classes/${currentClassId}/worlds`);
-    const worlds = await res.json();
+    const worlds = (await res.json()).filter(w => w.mode === 'eval');
     const dropdown = document.getElementById('ai-modal-world');
     if (!dropdown) return;
     dropdown.innerHTML = worlds.map(w => {
-      const label = w.mode === 'eval' ? 'Eval' : 'Leçon';
-      return `<option value="${w.id}">[${label}] ${w.name} — ${w.topic}</option>`;
-    }).join('') || '<option value="">Créer une activité d\'abord</option>';
+      return `<option value="${w.id}">[Eval] ${w.name} — ${w.topic}</option>`;
+    }).join('') || '<option value="">Créer une evaluation d\'abord</option>';
   } catch (err) { console.error(err); }
 }
 

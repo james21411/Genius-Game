@@ -460,6 +460,8 @@ def delete_question(question_id):
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     class_id = request.args.get('class_id')
+    mode = request.args.get('mode')
+    world_id = request.args.get('world_id')
     if not class_id:
         return jsonify({"error": "ID de classe requis"}), 400
     
@@ -467,14 +469,24 @@ def get_stats():
     students = conn.execute("SELECT id, name, xp, game_level FROM students WHERE class_id = ?", (class_id,)).fetchall()
     
     # Heatmap (Succès par question)
-    heatmap = conn.execute("""
-        SELECT q.question, q.topic, q.difficulty,
+    heatmap_params = [class_id]
+    heatmap_mode_clause = ""
+    if mode in ('lesson', 'eval'):
+        heatmap_mode_clause = " AND w.mode = ?"
+        heatmap_params.append(mode)
+    if world_id:
+        heatmap_mode_clause += " AND q.world_id = ?"
+        heatmap_params.append(world_id)
+
+    heatmap = conn.execute(f"""
+        SELECT q.question, q.topic, q.difficulty, q.world_id, w.mode,
                CAST(COUNT(CASE WHEN a.is_correct = 1 THEN 1 END) AS FLOAT) / COUNT(*) * 100 as success_rate
         FROM questions q
+        LEFT JOIN worlds w ON w.id = q.world_id
         JOIN answers a ON q.id = a.question_id
-        WHERE q.class_id = ?
+        WHERE q.class_id = ?{heatmap_mode_clause}
         GROUP BY q.id
-    """, (class_id,)).fetchall()
+    """, heatmap_params).fetchall()
     
     conn.close()
     return jsonify({
