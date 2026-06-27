@@ -28,6 +28,14 @@ window.floatingAmmoTexts = floatingAmmoTexts;
 // track jump button previous state to detect presses for double-jump
 let _prevJumpPressed = false;
 
+function itemEffects(){
+  return window.getStudentItemEffects?.() || window.studentItemEffects || {};
+}
+
+function timedEffectActive(key){
+  return Date.now() < (itemEffects()[key] || 0);
+}
+
 function rectsOverlap(a,b){
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -154,7 +162,7 @@ function loop(now){
       player._jumpHold = JUMP_HOLD_TIME;
       player._jumpCount = 1;
       playJump();
-    } else if((player._jumpCount || 0) < 2){
+    } else if((player._jumpCount || 0) < (timedEffectActive('jumpBootsUntil') ? 3 : 2)){
       // mid-air double jump (slightly reduced power)
       player.vy = -JUMP_V * 0.82;
       player._jumpHold = JUMP_HOLD_TIME * 0.6;
@@ -243,10 +251,12 @@ function loop(now){
   }
 
   // enemies - movement, shooting, collision (stomp) and simple bounce; enemies can spawn projectiles
+  const enemiesFrozen = timedEffectActive('enemyFreezeUntil');
   for(const e of world.enemies){
+    const enemyDt = enemiesFrozen ? 0 : dt;
     // movement
     if(e.type === 'saw' || e.type === 'spike_head') {
-      e.progress += dt * (e.speed / 50);
+      e.progress += enemyDt * (e.speed / 50);
       const offset = (Math.sin(e.progress) + 1) / 2;
       
       const distY = (e.endY || e.startY) - (e.startY || e.y);
@@ -257,18 +267,18 @@ function loop(now){
          e.x = (e.startX || e.x) + offset * distX;
       }
     } else if (e.type === 'ninja_frog') {
-      e.timer = (e.timer || 0) + dt;
+      e.timer = (e.timer || 0) + enemyDt;
       if (e.timer > 2.0 && e.grounded !== false) {
          e.vy = -JUMP_V * 0.8;
          e.timer = 0;
          e.grounded = false;
       }
-      e.vy = (e.vy || 0) + GRAVITY * dt;
-      e.y += e.vy * dt;
-      e.x += e.dir * e.speed * dt;
+      e.vy = (e.vy || 0) + GRAVITY * enemyDt;
+      e.y += e.vy * enemyDt;
+      e.x += e.dir * e.speed * enemyDt;
       let grounded = false;
       for (const p of world.platforms) {
-          if (e.vy > 0 && e.y + e.h <= p.y + 10 && e.y + e.h + e.vy*dt >= p.y && e.x + e.w > p.x && e.x < p.x + p.w) {
+          if (e.vy > 0 && e.y + e.h <= p.y + 10 && e.y + e.h + e.vy*enemyDt >= p.y && e.x + e.w > p.x && e.x < p.x + p.w) {
               e.y = p.y - e.h;
               e.vy = 0;
               grounded = true;
@@ -282,17 +292,17 @@ function loop(now){
         if (!under) e.dir *= -1;
       }
     } else if(e.flying){
-      e.x += e.dir * e.speed * dt;
+      e.x += e.dir * e.speed * enemyDt;
       if(e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
     } else {
-      e.x += e.dir * e.speed * dt;
+      e.x += e.dir * e.speed * enemyDt;
       const under = world.platforms.find(p => (e.x + e.w/2) >= p.x && (e.x + e.w/2) <= (p.x + p.w) && Math.abs((p.y) - (e.y + e.h)) < 40);
       if(!under || e.x < 0 || e.x + e.w > world.width) e.dir *= -1;
     }
 
     // shooting behavior (if marked shooter)
     if(e.shooter){
-      e._shootTimer = (e._shootTimer || (1.2 + Math.random()*2.0)) - dt;
+      e._shootTimer = (e._shootTimer || (1.2 + Math.random()*2.0)) - enemyDt;
       if(e._shootTimer <= 0){
         e._shootTimer = 1.2 + Math.random()*2.4;
         // spawn a projectile aimed roughly at the player
@@ -318,7 +328,7 @@ function loop(now){
 
     // Bosses perform occasional combo bursts (multiple projectiles in a spread)
     if(e.boss){
-      e._comboTimer = (e._comboTimer || (3.0 + Math.random()*3.0)) - dt;
+      e._comboTimer = (e._comboTimer || (3.0 + Math.random()*3.0)) - enemyDt;
       if(e._comboTimer <= 0){
         // reset with some variance
         e._comboTimer = 4.0 + Math.random()*4.0;
@@ -402,10 +412,11 @@ function loop(now){
   // projectiles update & collisions
   if(!world.projectiles) world.projectiles = [];
   for(const proj of world.projectiles){
-    proj.x += proj.vx * dt;
-    proj.y += proj.vy * dt;
-    proj.vy += GRAVITY * (proj.hostile ? 0.28 : 0.06) * dt; // slight gravity on projectiles
-    proj.life -= dt;
+    const projectileDt = proj.hostile && enemiesFrozen ? 0 : dt;
+    proj.x += proj.vx * projectileDt;
+    proj.y += proj.vy * projectileDt;
+    proj.vy += GRAVITY * (proj.hostile ? 0.28 : 0.06) * projectileDt; // slight gravity on projectiles
+    proj.life -= projectileDt;
     // collide with world bounds
     if(proj.x < 0 || proj.x > world.width || proj.y > world.height + 800) proj.life = 0;
     // collision with player (hostile)
@@ -474,7 +485,7 @@ function loop(now){
                   }
                 } else {
                   // Mauvaise réponse : en mode leçon on ne perd pas de vie !
-                  if (window.gameMode !== 'lesson') {
+                  if (window.gameMode !== 'lesson' && !window.consumeAnswerShield?.()) {
                     player.lives = Math.max(0, player.lives - 1);
                     playLose();
                     floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '-1 VIE'});
@@ -506,7 +517,19 @@ function loop(now){
 
   // coins and ammo pickups (coins array used for all visual pickups)
   for(const c of world.coins){
-    if(!c.collected && rectsOverlap({x: c.x - c.r, y: c.y - c.r, w: c.r*2, h: c.r*2}, pbox)){
+    if(!c.collected && timedEffectActive('coinMagnetUntil') && !c.isHeart && !c.isAmmo && !c.ammo){
+      const cx = c.x;
+      const cy = c.y;
+      const px = player.x + player.w / 2;
+      const py = player.y + player.h / 2;
+      const dist = Math.hypot(px - cx, py - cy);
+      if (dist < 220) {
+        c.x += ((px - cx) / Math.max(1, dist)) * 520 * dt;
+        c.y += ((py - cy) / Math.max(1, dist)) * 520 * dt;
+      }
+    }
+    const pickupRadius = timedEffectActive('coinMagnetUntil') && !c.isHeart && !c.isAmmo && !c.ammo ? 34 : c.r;
+    if(!c.collected && rectsOverlap({x: c.x - pickupRadius, y: c.y - pickupRadius, w: pickupRadius*2, h: pickupRadius*2}, pbox)){
       c.collected = true;
       player.collectTimer = 0.5; // Trigger player collect animation
       playCollect();
@@ -522,9 +545,10 @@ function loop(now){
         floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '+' + gained + ' BALLES'});
       } else {
         // Normal Coin: +100 score & +1 coin
+        const coinGain = timedEffectActive('coinMultiplierUntil') ? 2 : 1;
         score += 100;
-        player.coins = (player.coins || 0) + 1;
-        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: '+1 🪙'});
+        player.coins = (player.coins || 0) + coinGain;
+        floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.2, text: `+${coinGain} 🪙`});
       }
     }
   }

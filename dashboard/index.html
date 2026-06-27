@@ -94,6 +94,18 @@
           <img class="menu-icon-img" src="../icones/resultat.png" alt="" aria-hidden="true">
           <span class="menu-label">Resultats</span>
         </a>
+        <a href="#" class="menu-item" data-tab="leaderboard">
+          <img class="menu-icon-img" src="../icones/classement.png" alt="" aria-hidden="true">
+          <span class="menu-label">Classements</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="inventory">
+          <img class="menu-icon-img" src="../coin.png" alt="" aria-hidden="true">
+          <span class="menu-label">Inventaires</span>
+        </a>
+        <a href="#" class="menu-item" data-tab="settings">
+          <img class="menu-icon-img" src="../switch_button.png" alt="" aria-hidden="true">
+          <span class="menu-label">Parametres</span>
+        </a>
       </nav>
 
       <div class="sidebar-user">
@@ -362,6 +374,14 @@
                           <label for="lf-xp">XP</label>
                           <input type="number" id="lf-xp" value="50" min="10" max="300">
                         </div>
+                        <div class="form-group flex-1">
+                          <label for="lf-difficulty">Difficulte</label>
+                          <select id="lf-difficulty" class="form-select">
+                            <option value="1">Facile</option>
+                            <option value="2">Intermediaire</option>
+                            <option value="3">Difficile</option>
+                          </select>
+                        </div>
                       </div>
                       <div class="form-group">
                         <label for="lf-explanation">Explication</label>
@@ -472,6 +492,14 @@
                       <label for="q-timer">Temps (sec)</label>
                       <input type="number" id="q-timer" value="15" min="5" max="300">
                     </div>
+                    <div class="form-group flex-1">
+                      <label for="q-difficulty">Difficulte</label>
+                      <select id="q-difficulty" class="form-select">
+                        <option value="1">Facile</option>
+                        <option value="2">Intermediaire</option>
+                        <option value="3">Difficile</option>
+                      </select>
+                    </div>
                   </div>
                   <div class="form-group">
                     <label for="q-text">Enonce</label>
@@ -570,7 +598,7 @@
               <div class="card-body scrollable">
                 <table class="data-table">
                   <thead>
-                    <tr><th>Enonce</th><th>Type</th><th>Points</th><th>Activite</th><th>Actions</th></tr>
+                    <tr><th>Enonce</th><th>Type</th><th>Points</th><th>Difficulte</th><th>Actions</th></tr>
                   </thead>
                   <tbody id="questions-list-body"></tbody>
                 </table>
@@ -595,6 +623,89 @@
             </table>
           </div>
         </div>
+      </section>
+
+      <section id="panel-leaderboard" class="tab-panel hidden">
+        <div class="card">
+          <div class="card-header"><h3><img class="title-icon-img" src="../icones/classement.png" alt="" aria-hidden="true">Classement de la classe</h3></div>
+          <div class="card-body">
+            <div id="leaderboard-podium" class="leaderboard-podium"></div>
+            <table class="data-table">
+              <thead>
+                <tr><th>Rang</th><th>Eleve</th><th>Niveau</th><th>XP</th><th>Progression</th></tr>
+              </thead>
+              <tbody id="leaderboard-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-inventory" class="tab-panel hidden">
+        <div class="inventory-grid">
+          <div class="card">
+            <div class="card-header"><h3>Inventaire global</h3></div>
+            <div class="card-body">
+              <div id="inventory-summary" class="inventory-summary"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Objets par eleve</h3></div>
+            <div class="card-body">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Eleve</th><th>Pieces</th><th>Badges</th><th>Potions</th><th>Artefacts</th></tr>
+                </thead>
+                <tbody id="inventory-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-settings" class="tab-panel hidden">
+        <form id="settings-form" class="settings-grid">
+          <div class="card">
+            <div class="card-header"><h3>Audio</h3></div>
+            <div class="card-body settings-stack">
+              <label class="setting-toggle"><input type="checkbox" id="set-sound-enabled"> <span>Activer les sons du jeu</span></label>
+              <label class="setting-row"><span>Volume general</span><input type="range" id="set-master-volume" min="0" max="100" value="70"></label>
+              <label class="setting-row"><span>Musique</span><input type="range" id="set-music-volume" min="0" max="100" value="45"></label>
+              <label class="setting-row"><span>Effets</span><input type="range" id="set-effects-volume" min="0" max="100" value="80"></label>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Gameplay eleve</h3></div>
+            <div class="card-body settings-stack">
+              <label class="setting-toggle"><input type="checkbox" id="set-show-timer"> <span>Afficher le chronometre</span></label>
+              <label class="setting-toggle"><input type="checkbox" id="set-allow-retry"> <span>Autoriser une seconde tentative en lecon</span></label>
+              <label class="setting-row"><span>Difficulte par defaut</span>
+                <select id="set-default-difficulty" class="form-select">
+                  <option value="1">Facile</option>
+                  <option value="2">Intermediaire</option>
+                  <option value="3">Difficile</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Affichage</h3></div>
+            <div class="card-body settings-stack">
+              <label class="setting-toggle"><input type="checkbox" id="set-reduced-motion"> <span>Reduire les animations</span></label>
+              <label class="setting-toggle"><input type="checkbox" id="set-high-contrast"> <span>Contraste renforce</span></label>
+              <label class="setting-row"><span>Theme des plateformes</span>
+                <select id="set-platform-theme" class="form-select">
+                  <option value="difficulty">Couleur par difficulte</option>
+                  <option value="classic">Classique</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button type="submit" class="btn btn-success">Enregistrer les parametres</button>
+            <button type="button" id="btn-reset-settings" class="btn btn-secondary">Reinitialiser</button>
+            <span id="settings-feedback" class="feedback-msg"></span>
+          </div>
+        </form>
       </section>
 
       <!-- Modal générateur IA -->

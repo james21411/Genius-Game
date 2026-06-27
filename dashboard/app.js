@@ -32,6 +32,31 @@ let aiGeneratedPreview = [];
 let lessonAiInitialized = false;
 let lessonAiPreview = [];
 let lessonFragmentImageData = '';
+let editingLessonFragmentId = null;
+
+const STUDENT_AVATARS = [
+  '../player.png',
+  '../Ninja Frog/Idle (32x32).png',
+  '../boss1.png',
+  '../boss2.png',
+  '../boss3.png',
+  '../maylis_clean.png',
+  '../etoundi_clean.png',
+  '../mon_sp_clean.png'
+];
+
+const DEFAULT_SETTINGS = {
+  soundEnabled: true,
+  masterVolume: 70,
+  musicVolume: 45,
+  effectsVolume: 80,
+  showTimer: true,
+  allowRetry: true,
+  defaultDifficulty: '1',
+  reducedMotion: false,
+  highContrast: false,
+  platformTheme: 'difficulty'
+};
 
 // --- DOM Elements ---
 const authOverlay = document.getElementById('auth-overlay');
@@ -47,7 +72,10 @@ const tabInfo = {
   lessons: { title: "Lecons", desc: "Configurez des activites d'apprentissage guide." },
   evaluations: { title: "Evaluations", desc: "Configurez des activites d'evaluation chronometree." },
   questions: { title: "Banque de questions", desc: "Ajoutez des questions a vos activites ou generez-les depuis vos cours." },
-  results: { title: "Resultats", desc: "Consultez les performances de vos eleves." }
+  results: { title: "Resultats", desc: "Consultez les performances de vos eleves." },
+  leaderboard: { title: "Classements", desc: "Comparez les progressions XP et les niveaux." },
+  inventory: { title: "Inventaires", desc: "Suivez les pieces, badges et recompenses de chaque eleve." },
+  settings: { title: "Parametres", desc: "Reglez le son, l'affichage et les options de gameplay." }
 };
 
 // --- Initialization ---
@@ -73,6 +101,7 @@ async function showApp() {
   initLessonFragments();
   initLessonAiModal();
   initDashboardFilters();
+  initSettings();
   await fetchClasses();
 }
 
@@ -107,7 +136,10 @@ function initSidebar() {
       lessons: 'LE',
       evaluations: 'EV',
       questions: 'Q',
-      results: 'R'
+      results: 'R',
+      leaderboard: 'CL',
+      inventory: 'IN',
+      settings: 'PA'
     };
     item.dataset.short = shortLabels[item.dataset.tab] || item.textContent.trim().slice(0, 2).toUpperCase();
     if (item.dataset.ready) return;
@@ -141,6 +173,12 @@ function initSidebar() {
         fetchQuestionsList();
       } else if (tab === 'results') {
         fetchStats();
+      } else if (tab === 'leaderboard') {
+        fetchStats();
+      } else if (tab === 'inventory') {
+        fetchStats();
+      } else if (tab === 'settings') {
+        loadSettingsForm();
       }
     });
   });
@@ -156,6 +194,96 @@ function initDashboardFilters() {
     fetchStats();
   });
   worldFilter.addEventListener('change', fetchStats);
+}
+
+function getStudentAvatar(student, index = 0) {
+  const raw = Number.isFinite(Number(student?.avatar)) ? Number(student.avatar) : index;
+  return STUDENT_AVATARS[Math.abs(raw) % STUDENT_AVATARS.length];
+}
+
+function renderStudentIdentity(student, index = 0) {
+  return `
+    <div class="student-identity">
+      <img class="student-avatar" src="${getStudentAvatar(student, index)}" alt="">
+      <strong>${escapeHtml(student?.name || 'Eleve')}</strong>
+    </div>
+  `;
+}
+
+function getTeacherSettings() {
+  const raw = localStorage.getItem(`teacher_settings_${currentTeacherId || 'default'}`);
+  if (!raw) return { ...DEFAULT_SETTINGS };
+  try {
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (err) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveTeacherSettings(settings) {
+  localStorage.setItem(`teacher_settings_${currentTeacherId || 'default'}`, JSON.stringify(settings));
+}
+
+function loadSettingsForm() {
+  const settings = getTeacherSettings();
+  const assign = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = !!value;
+    else el.value = value;
+  };
+  assign('set-sound-enabled', settings.soundEnabled);
+  assign('set-master-volume', settings.masterVolume);
+  assign('set-music-volume', settings.musicVolume);
+  assign('set-effects-volume', settings.effectsVolume);
+  assign('set-show-timer', settings.showTimer);
+  assign('set-allow-retry', settings.allowRetry);
+  assign('set-default-difficulty', settings.defaultDifficulty);
+  assign('set-reduced-motion', settings.reducedMotion);
+  assign('set-high-contrast', settings.highContrast);
+  assign('set-platform-theme', settings.platformTheme);
+}
+
+function readSettingsForm() {
+  const value = (id) => document.getElementById(id)?.value;
+  const checked = (id) => !!document.getElementById(id)?.checked;
+  return {
+    soundEnabled: checked('set-sound-enabled'),
+    masterVolume: parseInt(value('set-master-volume')) || 0,
+    musicVolume: parseInt(value('set-music-volume')) || 0,
+    effectsVolume: parseInt(value('set-effects-volume')) || 0,
+    showTimer: checked('set-show-timer'),
+    allowRetry: checked('set-allow-retry'),
+    defaultDifficulty: value('set-default-difficulty') || '1',
+    reducedMotion: checked('set-reduced-motion'),
+    highContrast: checked('set-high-contrast'),
+    platformTheme: value('set-platform-theme') || 'difficulty'
+  };
+}
+
+function initSettings() {
+  const form = document.getElementById('settings-form');
+  if (!form || form.dataset.ready) return;
+  form.dataset.ready = '1';
+  loadSettingsForm();
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveTeacherSettings(readSettingsForm());
+    const feedback = document.getElementById('settings-feedback');
+    if (feedback) {
+      feedback.textContent = 'Parametres enregistres.';
+      feedback.className = 'feedback-msg feedback-success';
+    }
+  });
+  document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
+    saveTeacherSettings({ ...DEFAULT_SETTINGS });
+    loadSettingsForm();
+    const feedback = document.getElementById('settings-feedback');
+    if (feedback) {
+      feedback.textContent = 'Parametres reinitialises.';
+      feedback.className = 'feedback-msg';
+    }
+  });
 }
 
 async function loadDashboardWorldFilter() {
@@ -267,6 +395,8 @@ async function fetchClasses() {
       else if (activeTab === 'lessons') { fetchWorldsList('lesson'); fetchLessonWorldDropdowns(); }
       else if (activeTab === 'evaluations') fetchWorldsList('eval');
       else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
+      else if (activeTab === 'leaderboard' || activeTab === 'inventory') fetchStats();
+      else if (activeTab === 'settings') loadSettingsForm();
     } else {
       classSelect.innerHTML = '<option value="">Créer une classe...</option>';
       navClassCode.textContent = '-';
@@ -284,6 +414,8 @@ classSelect.onchange = (e) => {
   else if (activeTab === 'evaluations') fetchWorldsList('eval');
   else if (activeTab === 'questions') { fetchWorldsDropdown(); fetchQuestionsList(); }
   else if (activeTab === 'results') fetchStats();
+  else if (activeTab === 'leaderboard' || activeTab === 'inventory') fetchStats();
+  else if (activeTab === 'settings') loadSettingsForm();
 };
 
 function updateClassDisplay() {
@@ -488,6 +620,13 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#039;');
 }
 
+function difficultyLabel(value) {
+  const level = parseInt(value) || 1;
+  if (level >= 3) return 'Difficile';
+  if (level === 2) return 'Intermediaire';
+  return 'Facile';
+}
+
 function buildBloomChecks(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -542,13 +681,17 @@ async function fetchLessonFragments() {
           <p>${escapeHtml(f.content)}</p>
           <strong>Test :</strong> ${escapeHtml(f.check_question?.question || '')}
         </div>
-        <button type="button" class="btn btn-danger btn-sm" onclick="deleteLessonFragment(${f.id})">Suppr.</button>
+        <div class="lesson-fragment-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="editLessonFragment(${JSON.stringify(f).replace(/"/g, '&quot;')})">Modifier</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteLessonFragment(${f.id})">Suppr.</button>
+        </div>
       </article>
     `).join('') || '<p class="text-center">Aucun fragment pour cette lecon.</p>';
   } catch (err) { console.error(err); }
 }
 
 function resetLessonFragmentForm() {
+  editingLessonFragmentId = null;
   ['lf-title', 'lf-content', 'lf-question', 'lf-a', 'lf-b', 'lf-c', 'lf-d', 'lf-explanation'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -558,9 +701,12 @@ function resetLessonFragmentForm() {
   document.getElementById('lf-correct').value = 'A';
   document.getElementById('lf-time').value = '20';
   document.getElementById('lf-xp').value = '50';
+  document.getElementById('lf-difficulty').value = '1';
   document.getElementById('lf-image').value = '';
   document.getElementById('lf-image-preview')?.classList.add('hidden');
   lessonFragmentImageData = '';
+  const submit = document.querySelector('#lesson-fragment-form button[type="submit"]');
+  if (submit) submit.textContent = 'Ajouter le fragment';
 }
 
 function initLessonFragments() {
@@ -617,19 +763,22 @@ function initLessonFragments() {
         points: 1,
         time_limit: parseInt(document.getElementById('lf-time').value) || 20,
         xp_reward: parseInt(document.getElementById('lf-xp').value) || 50,
+        difficulty: parseInt(document.getElementById('lf-difficulty').value) || 1,
       }
     };
 
     const feedback = document.getElementById('lf-feedback');
-    feedback.textContent = 'Enregistrement du fragment...';
+    feedback.textContent = editingLessonFragmentId ? 'Mise a jour du fragment...' : 'Enregistrement du fragment...';
     try {
-      const res = await fetch(`${API}/lesson-fragments`, {
-        method: 'POST',
+      const url = editingLessonFragmentId ? `${API}/lesson-fragments/${editingLessonFragmentId}` : `${API}/lesson-fragments`;
+      const method = editingLessonFragmentId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error('Erreur de validation');
-      feedback.textContent = 'Fragment ajoute.';
+      feedback.textContent = editingLessonFragmentId ? 'Fragment mis a jour.' : 'Fragment ajoute.';
       feedback.className = 'feedback-msg feedback-success';
       resetLessonFragmentForm();
       await fetchLessonFragments();
@@ -639,6 +788,39 @@ function initLessonFragments() {
     }
   });
 }
+
+window.editLessonFragment = (fragment) => {
+  editingLessonFragmentId = fragment.id;
+  const question = fragment.check_question || {};
+  document.getElementById('lf-world').value = fragment.world_id || document.getElementById('lf-world').value;
+  document.getElementById('lf-order').value = fragment.order_index || 1;
+  document.getElementById('lf-bloom').value = fragment.bloom_level || 'comprehension';
+  document.getElementById('lf-title').value = fragment.title || '';
+  document.getElementById('lf-content').value = fragment.content || '';
+  document.getElementById('lf-question').value = question.question || '';
+  document.getElementById('lf-a').value = question.answer_a || '';
+  document.getElementById('lf-b').value = question.answer_b || '';
+  document.getElementById('lf-c').value = question.answer_c || '';
+  document.getElementById('lf-d').value = question.answer_d || '';
+  document.getElementById('lf-correct').value = question.correct_answer || 'A';
+  document.getElementById('lf-time').value = question.time_limit || 20;
+  document.getElementById('lf-xp').value = question.xp_reward || 50;
+  document.getElementById('lf-difficulty').value = question.difficulty || 1;
+  document.getElementById('lf-explanation').value = question.explanation || '';
+  lessonFragmentImageData = fragment.image_data || '';
+  const preview = document.getElementById('lf-image-preview');
+  if (preview && lessonFragmentImageData) {
+    preview.innerHTML = lessonFragmentImageData.startsWith('data:image')
+      ? `<img src="${lessonFragmentImageData}" alt="">`
+      : escapeHtml(lessonFragmentImageData);
+    preview.classList.remove('hidden');
+  } else {
+    preview?.classList.add('hidden');
+  }
+  const submit = document.querySelector('#lesson-fragment-form button[type="submit"]');
+  if (submit) submit.textContent = 'Mettre a jour le fragment';
+  document.querySelector('#panel-lessons .col-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 window.deleteLessonFragment = async (id) => {
   if (!confirm('Supprimer ce fragment et sa question de verification ?')) return;
@@ -750,6 +932,14 @@ function renderLessonAiPreview() {
               <label>XP</label>
               <input type="number" min="10" max="300" data-question-field="xp_reward" value="${question.xp_reward || 50}">
             </div>
+            <div class="form-group flex-1">
+              <label>Difficulte</label>
+              <select data-question-field="difficulty">
+                <option value="1" ${(parseInt(question.difficulty) || 1) === 1 ? 'selected' : ''}>Facile</option>
+                <option value="2" ${(parseInt(question.difficulty) || 1) === 2 ? 'selected' : ''}>Intermediaire</option>
+                <option value="3" ${(parseInt(question.difficulty) || 1) === 3 ? 'selected' : ''}>Difficile</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label>Explication</label>
@@ -793,7 +983,7 @@ function applyLessonPreviewEdit(idx) {
   fragment.question = fragment.question || {};
   form.querySelectorAll('[data-question-field]').forEach(input => {
     const field = input.dataset.questionField;
-    fragment.question[field] = ['time_limit', 'xp_reward'].includes(field) ? (parseInt(input.value) || 0) : input.value;
+    fragment.question[field] = ['time_limit', 'xp_reward', 'difficulty'].includes(field) ? (parseInt(input.value) || 0) : input.value;
   });
   renderLessonAiPreview();
 }
@@ -991,6 +1181,7 @@ document.getElementById('question-form').onsubmit = async (e) => {
     points: parseInt(document.getElementById('q-points').value) || 1,
     xp_reward: parseInt(document.getElementById('q-xp').value),
     time_limit: parseInt(document.getElementById('q-timer').value),
+    difficulty: parseInt(document.getElementById('q-difficulty').value) || 1,
     explanation: document.getElementById('q-explanation').value,
     
     // Default empty fields
@@ -1117,6 +1308,7 @@ function resetQuestionForm() {
   document.getElementById('missing-words-list').innerHTML = "";
   document.getElementById('q-explanation').value = "";
   document.getElementById('q-points').value = "1";
+  document.getElementById('q-difficulty').value = "1";
   document.getElementById('btn-save-question').textContent = "ENREGISTRER";
 }
 
@@ -1140,7 +1332,7 @@ async function fetchQuestionsList() {
         <td style="max-width:300px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${q.question}</td>
         <td><span style="background:rgba(255,255,255,0.08); padding:3px 6px; border-radius:4px; font-size:12px;">${(q.type || '').toUpperCase()}</span></td>
         <td><strong>${q.points ?? 1}</strong> pt</td>
-        <td>Monde ${q.world_id || '—'}</td>
+        <td><span class="difficulty-pill difficulty-${q.difficulty || 1}">${difficultyLabel(q.difficulty)}</span></td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="editQuestion(${JSON.stringify(q).replace(/"/g, '&quot;')})">Modifier</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuestion(${q.id})">Suppr.</button>
@@ -1163,6 +1355,7 @@ window.editQuestion = (q) => {
   document.getElementById('q-points').value = q.points ?? 1;
   document.getElementById('q-xp').value = q.xp_reward;
   document.getElementById('q-timer').value = q.time_limit || 15;
+  document.getElementById('q-difficulty').value = q.difficulty || 1;
   document.getElementById('q-text').value = q.question;
   document.getElementById('q-explanation').value = q.explanation || "";
 
@@ -1353,9 +1546,9 @@ function renderDashboard(data) {
 
   // Render Dashboard table row
   const tbodyStud = document.getElementById('dashboard-students-body');
-  tbodyStud.innerHTML = students.map(s => `
+  tbodyStud.innerHTML = students.map((s, idx) => `
     <tr>
-      <td><strong>${s.name}</strong></td>
+      <td>${renderStudentIdentity(s, idx)}</td>
       <td>Niveau ${s.game_level}</td>
       <td><span style="color:#fbbf24; font-weight:bold;">${s.xp} XP</span></td>
       <td><span style="background:rgba(16,185,129,0.15); color:#10b981; padding:3px 6px; border-radius:4px; font-size:12px;">Actif</span></td>
@@ -1385,14 +1578,98 @@ function renderDashboard(data) {
   // Render detailed results table
   const tbodyResults = document.getElementById('results-students-body');
   if (tbodyResults) {
-    tbodyResults.innerHTML = students.map(s => `
+    tbodyResults.innerHTML = students.map((s, idx) => `
       <tr>
-        <td><strong>${s.name}</strong></td>
+        <td>${renderStudentIdentity(s, idx)}</td>
         <td><strong style="color:#fbbf24;">${s.xp} XP</strong></td>
         <td>Niveau ${s.game_level}</td>
         <td><span style="color:#10b981;">Inscrit</span></td>
       </tr>
     `).join('') || `<tr><td colspan="4" class="text-center">Aucun élève enregistré.</td></tr>`;
+  }
+
+  renderLeaderboard(students || []);
+  renderInventory(students || []);
+}
+
+function renderLeaderboard(students) {
+  const sorted = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+  const podium = document.getElementById('leaderboard-podium');
+  if (podium) {
+    podium.innerHTML = sorted.slice(0, 3).map((s, idx) => `
+      <div class="podium-card rank-${idx + 1}">
+        <span class="podium-rank">#${idx + 1}</span>
+        <img class="student-avatar large" src="${getStudentAvatar(s, idx)}" alt="">
+        <strong>${escapeHtml(s.name)}</strong>
+        <span>${s.xp || 0} XP</span>
+      </div>
+    `).join('') || '<p class="text-center">Aucun eleve classe.</p>';
+  }
+
+  const body = document.getElementById('leaderboard-body');
+  if (body) {
+    const maxXp = Math.max(...sorted.map(s => s.xp || 0), 1);
+    body.innerHTML = sorted.map((s, idx) => {
+      const pct = Math.round(((s.xp || 0) / maxXp) * 100);
+      return `
+        <tr>
+          <td><strong>#${idx + 1}</strong></td>
+          <td>${renderStudentIdentity(s, idx)}</td>
+          <td>Niveau ${s.game_level || 1}</td>
+          <td><strong style="color:#fbbf24;">${s.xp || 0} XP</strong></td>
+          <td><div class="mini-progress"><span style="width:${pct}%"></span></div></td>
+        </tr>
+      `;
+    }).join('') || '<tr><td colspan="5" class="text-center">Aucun eleve.</td></tr>';
+  }
+}
+
+function getInventoryForStudent(student) {
+  const xp = Number(student.xp || 0);
+  return {
+    coins: Math.max(0, Math.floor(xp / 10)),
+    badges: Math.max(0, Math.floor(xp / 250)),
+    potions: Math.max(0, Math.floor((Number(student.game_level || 1) + xp / 200) % 6)),
+    artifacts: Math.max(0, Math.floor(xp / 600))
+  };
+}
+
+function renderInventory(students) {
+  const summary = students.reduce((acc, s) => {
+    const inv = getInventoryForStudent(s);
+    acc.coins += inv.coins;
+    acc.badges += inv.badges;
+    acc.potions += inv.potions;
+    acc.artifacts += inv.artifacts;
+    return acc;
+  }, { coins: 0, badges: 0, potions: 0, artifacts: 0 });
+
+  const summaryEl = document.getElementById('inventory-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = [
+      ['Pieces', summary.coins],
+      ['Badges', summary.badges],
+      ['Potions', summary.potions],
+      ['Artefacts', summary.artifacts]
+    ].map(([label, value]) => `
+      <div class="inventory-stat"><strong>${value}</strong><span>${label}</span></div>
+    `).join('');
+  }
+
+  const body = document.getElementById('inventory-body');
+  if (body) {
+    body.innerHTML = students.map((s, idx) => {
+      const inv = getInventoryForStudent(s);
+      return `
+        <tr>
+          <td>${renderStudentIdentity(s, idx)}</td>
+          <td>${inv.coins}</td>
+          <td>${inv.badges}</td>
+          <td>${inv.potions}</td>
+          <td>${inv.artifacts}</td>
+        </tr>
+      `;
+    }).join('') || '<tr><td colspan="5" class="text-center">Aucun inventaire.</td></tr>';
   }
 }
 
@@ -1477,7 +1754,7 @@ function renderRadarChart(heatmap, summary) {
 
 // Auto-refresh statistics every 15 seconds
 setInterval(() => {
-  if (activeTab === 'dashboard' || activeTab === 'results') {
+  if (activeTab === 'dashboard' || activeTab === 'results' || activeTab === 'leaderboard' || activeTab === 'inventory') {
     fetchStats();
   }
 }, 15000);

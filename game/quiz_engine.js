@@ -43,11 +43,17 @@ const BTN_COLORS = {
 };
 const ANSWERS = ['A', 'B', 'C', 'D'];
 
+function _studentEffectActive(key) {
+  const effects = window.getStudentItemEffects?.() || window.studentItemEffects || {};
+  return Date.now() < (effects[key] || 0);
+}
+
 // ── API publique ──────────────────────────────────────────────────────────────
 
 export async function loadQuestions(worldId) {
   _questionPool = [];
   _poolIndex = 0;
+  window.quizQuestionDifficulties = [];
 
   if (!worldId) {
     console.warn('[Quiz] Aucune activite selectionnee — pas de questions chargees.');
@@ -64,6 +70,7 @@ export async function loadQuestions(worldId) {
       }
       _questionPool = apiQuestions;
       _shufflePool();
+      window.quizQuestionDifficulties = _questionPool.map(q => parseInt(q.difficulty) || 1);
       console.log(`[Quiz] ${_questionPool.length} questions pour activite ${worldId}`);
       return true;
     }
@@ -119,6 +126,7 @@ export function triggerQuiz(platform, onComplete) {
   _poolIndex++;
 
   _platform = platform;
+  if (platform) platform.difficulty = parseInt(_question.difficulty) || platform.difficulty || 1;
   _onComplete = onComplete || null;
   _active = true;
   _state = 'entering';
@@ -155,7 +163,7 @@ export function updateQuiz(dt) {
         _syncOverlay();
         break;
       }
-      _timer -= dt;
+      _timer -= dt * (_studentEffectActive('quizSlowUntil') ? 0.45 : 1);
       _syncOverlayTimer();
       if (_timer <= 0) _resolveAnswer(null);
       break;
@@ -961,12 +969,15 @@ function _resolveAnswer(choice) {
     _questionsCorrect++;
     _spawnConfetti();
   } else {
-    playLose();
-    if (window.gameMode !== 'lesson' && player && typeof player.lives === 'number') {
-      player.lives = Math.max(0, player.lives - 1);
-      if (player.lives <= 0) {
-        window.gameState = 'gameover';
-        window.updateMenuVisibility?.();
+    const shielded = window.gameMode !== 'lesson' && window.consumeAnswerShield?.();
+    if (!shielded) {
+      playLose();
+      if (window.gameMode !== 'lesson' && player && typeof player.lives === 'number') {
+        player.lives = Math.max(0, player.lives - 1);
+        if (player.lives <= 0) {
+          window.gameState = 'gameover';
+          window.updateMenuVisibility?.();
+        }
       }
     }
   }

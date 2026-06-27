@@ -61,6 +61,8 @@ def ensure_schema():
     cols = [row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
     if cols and 'points' not in cols:
         conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER DEFAULT 1")
+    if cols and 'difficulty' not in cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN difficulty INTEGER DEFAULT 1")
     if cols and 'lesson_fragment_id' not in cols:
         conn.execute("ALTER TABLE questions ADD COLUMN lesson_fragment_id INTEGER")
 
@@ -437,12 +439,12 @@ def update_question(question_id):
         UPDATE questions SET 
             type = ?, subject = ?, topic = ?, bloom_level = ?, question = ?,
             answer_a = ?, answer_b = ?, answer_c = ?, answer_d = ?,
-            correct_answer = ?, explanation = ?, xp_reward = ?, time_limit = ?, points = ?, extra_data = ?
+            correct_answer = ?, explanation = ?, xp_reward = ?, time_limit = ?, points = ?, difficulty = ?, extra_data = ?
         WHERE id = ?
     """, (data.get('type'), data.get('subject'), data.get('topic'), data.get('bloom_level'), data.get('question'),
           data.get('answer_a'), data.get('answer_b'), data.get('answer_c'), data.get('answer_d'),
           data.get('correct_answer'), data.get('explanation'), data.get('xp_reward', 50), data.get('time_limit', 15),
-          data.get('points', 1), data.get('extra_data'), question_id))
+          data.get('points', 1), data.get('difficulty', 1), data.get('extra_data'), question_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Question mise à jour"}), 200
@@ -577,6 +579,7 @@ def _normalize_generated_question(q, q_type):
         'points': int(q.get('points') or 1),
         'time_limit': int(q.get('time_limit') or 15),
         'xp_reward': int(q.get('xp_reward') or 50),
+        'difficulty': int(q.get('difficulty') or 1),
     }
 
 
@@ -610,6 +613,7 @@ def _normalize_lesson_fragment(fragment, order_index=1):
         'points': question.get('points') or 1,
         'time_limit': question.get('time_limit') or 20,
         'xp_reward': question.get('xp_reward') or 50,
+        'difficulty': question.get('difficulty') or fragment.get('difficulty') or 1,
     }, 'qcm')
 
     return {
@@ -641,14 +645,14 @@ def _insert_question_row(db, class_id, world_id, q_type, q):
     db.execute('''
         INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
                              answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
-                             extra_data, points, time_limit, xp_reward)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             extra_data, points, time_limit, xp_reward, difficulty)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         class_id, world_id, normalized['type'], normalized['subject'], normalized['topic'],
         normalized['bloom_level'], normalized['question'],
         normalized['answer_a'], normalized['answer_b'], normalized['answer_c'], normalized['answer_d'],
         normalized['correct_answer'], normalized['explanation'], normalized['extra_data'],
-        normalized['points'], normalized['time_limit'], normalized['xp_reward']
+        normalized['points'], normalized['time_limit'], normalized['xp_reward'], normalized['difficulty']
     ))
 
 
@@ -686,6 +690,7 @@ def bulk_add_questions():
                 'points': q.get('points', 1),
                 'time_limit': q.get('time_limit', 15),
                 'xp_reward': q.get('xp_reward', 50),
+                'difficulty': q.get('difficulty', 1),
             }
             extra_data = row['extra_data']
             if isinstance(extra_data, dict):
@@ -693,13 +698,13 @@ def bulk_add_questions():
             db.execute('''
                 INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
                                      answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
-                                     extra_data, points, time_limit, xp_reward)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     extra_data, points, time_limit, xp_reward, difficulty)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 class_id, world_id, q_type, row['subject'], row['topic'], row['bloom_level'], row['question'],
                 row['answer_a'], row['answer_b'], row['answer_c'], row['answer_d'],
                 row['correct_answer'], row['explanation'], extra_data or '',
-                row['points'], row['time_limit'], row['xp_reward']
+                row['points'], row['time_limit'], row['xp_reward'], row['difficulty']
             ))
             inserted += 1
         db.commit()
@@ -714,7 +719,7 @@ def get_lesson_fragments(world_id):
     conn = get_db()
     rows = conn.execute("""
         SELECT lf.*, q.type, q.question, q.answer_a, q.answer_b, q.answer_c, q.answer_d,
-               q.correct_answer, q.explanation, q.points, q.time_limit, q.xp_reward
+               q.correct_answer, q.explanation, q.points, q.time_limit, q.xp_reward, q.difficulty
         FROM lesson_fragments lf
         LEFT JOIN questions q ON q.id = lf.question_id
         WHERE lf.world_id = ?
@@ -738,9 +743,10 @@ def get_lesson_fragments(world_id):
             'points': item.get('points') or 1,
             'time_limit': item.get('time_limit') or 20,
             'xp_reward': item.get('xp_reward') or 50,
+            'difficulty': item.get('difficulty') or 1,
         }
         for key in ('type', 'question', 'answer_a', 'answer_b', 'answer_c', 'answer_d',
-                    'correct_answer', 'explanation', 'points', 'time_limit', 'xp_reward'):
+                    'correct_answer', 'explanation', 'points', 'time_limit', 'xp_reward', 'difficulty'):
             item.pop(key, None)
         fragments.append(item)
     return jsonify(fragments)
@@ -762,13 +768,14 @@ def add_lesson_fragment():
         conn.execute("""
             INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
                                  answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
-                                 extra_data, points, time_limit, xp_reward, lesson_fragment_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                                 extra_data, points, time_limit, xp_reward, difficulty, lesson_fragment_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         """, (
             class_id, world_id, 'qcm', data.get('subject') or 'Leçon',
             data.get('topic') or fragment['title'], fragment['bloom_level'], q['question'],
             q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
-            q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward']
+            q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward'],
+            q['difficulty']
         ))
         question_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute("""
@@ -785,6 +792,72 @@ def add_lesson_fragment():
         conn.close()
 
     return jsonify({"fragment_id": fragment_id, "question_id": question_id}), 201
+
+
+@app.route('/api/lesson-fragments/<int:fragment_id>', methods=['PUT'])
+def update_lesson_fragment(fragment_id):
+    data = request.json or {}
+    fragment = _normalize_lesson_fragment(data, data.get('order_index') or 1)
+
+    if not fragment['content']:
+        return jsonify({"error": "contenu requis"}), 400
+
+    conn = get_db()
+    try:
+        row = conn.execute("""
+            SELECT lf.question_id, lf.class_id, lf.world_id, w.subject, w.topic
+            FROM lesson_fragments lf
+            LEFT JOIN worlds w ON w.id = lf.world_id
+            WHERE lf.id = ?
+        """, (fragment_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Fragment introuvable"}), 404
+
+        q = fragment['question']
+        question_id = row['question_id']
+        if question_id:
+            conn.execute("""
+                UPDATE questions SET type = ?, subject = ?, topic = ?, bloom_level = ?, question = ?,
+                    answer_a = ?, answer_b = ?, answer_c = ?, answer_d = ?,
+                    correct_answer = ?, explanation = ?, extra_data = ?, points = ?, time_limit = ?, xp_reward = ?, difficulty = ?
+                WHERE id = ?
+            """, (
+                'qcm', data.get('subject') or row['subject'] or 'Leçon',
+                data.get('topic') or row['topic'] or fragment['title'], fragment['bloom_level'], q['question'],
+                q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
+                q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward'],
+                q['difficulty'],
+                question_id
+            ))
+        else:
+            conn.execute("""
+                INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
+                                     answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
+                                     extra_data, points, time_limit, xp_reward, difficulty, lesson_fragment_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                row['class_id'], row['world_id'], 'qcm', data.get('subject') or row['subject'] or 'Leçon',
+                data.get('topic') or row['topic'] or fragment['title'], fragment['bloom_level'], q['question'],
+                q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
+                q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward'],
+                q['difficulty'],
+                fragment_id
+            ))
+            question_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        conn.execute("""
+            UPDATE lesson_fragments
+            SET order_index = ?, title = ?, content = ?, image_data = ?, bloom_level = ?, question_id = ?
+            WHERE id = ?
+        """, (
+            fragment['order_index'], fragment['title'], fragment['content'], fragment['image_data'],
+            fragment['bloom_level'], question_id, fragment_id
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"message": "Fragment mis à jour", "fragment_id": fragment_id, "question_id": question_id}), 200
 
 
 @app.route('/api/lesson-fragments/<int:fragment_id>', methods=['DELETE'])
@@ -824,12 +897,13 @@ def bulk_add_lesson_fragments():
             conn.execute("""
                 INSERT INTO questions (class_id, world_id, type, subject, topic, bloom_level, question,
                                      answer_a, answer_b, answer_c, answer_d, correct_answer, explanation,
-                                     extra_data, points, time_limit, xp_reward, lesson_fragment_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                                     extra_data, points, time_limit, xp_reward, difficulty, lesson_fragment_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
             """, (
                 class_id, world_id, 'qcm', subject, topic, fragment['bloom_level'], q['question'],
                 q['answer_a'], q['answer_b'], q['answer_c'], q['answer_d'],
-                q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward']
+                q['correct_answer'], q['explanation'], '', q['points'], q['time_limit'], q['xp_reward'],
+                q['difficulty']
             ))
             question_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute("""

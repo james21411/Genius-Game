@@ -28,18 +28,30 @@ let jumpSound = null;
 let loseSound = null;
 let collectSound = null;
 
+function soundEnabled() {
+  return window.studentSoundEnabled !== false;
+}
+
+function masterVolume() {
+  return Math.max(0, Math.min(1, Number(window.studentMasterVolume ?? 1)));
+}
+
+function scaledVolume(value) {
+  return soundEnabled() ? value * masterVolume() : 0;
+}
+
 function initSounds() {
   if (!jumpSound) {
     jumpSound = new Audio('musiques/jump.wav');
-    jumpSound.volume = 0.4;
+    jumpSound.volume = scaledVolume(0.4);
   }
   if (!loseSound) {
     loseSound = new Audio('musiques/lose.wav');
-    loseSound.volume = 0.5;
+    loseSound.volume = scaledVolume(0.5);
   }
   if (!collectSound) {
     collectSound = new Audio('musiques/collect_coin.wav');
-    collectSound.volume = COLLECT_SOUND_VOLUME;
+    collectSound.volume = scaledVolume(COLLECT_SOUND_VOLUME);
   }
 }
 
@@ -71,7 +83,7 @@ function playNext() {
   }
 
   currentMusic = new Audio(nextSongSrc);
-  currentMusic.volume = NORMAL_MUSIC_VOLUME;
+  currentMusic.volume = scaledVolume(NORMAL_MUSIC_VOLUME);
   
   currentMusic.addEventListener('ended', () => {
     playNext();
@@ -84,11 +96,15 @@ function playNext() {
 
 export function startMusic() {
   initSounds();
+  if (!soundEnabled()) {
+    pauseMusic();
+    return;
+  }
   if (musicPlaying) return;
   musicPlaying = true;
   
   if (currentMusic) {
-    currentMusic.volume = NORMAL_MUSIC_VOLUME;
+    currentMusic.volume = scaledVolume(NORMAL_MUSIC_VOLUME);
     currentMusic.play().catch(err => {
       console.warn('[Sound] Music play resumed/deferred:', err.message);
     });
@@ -118,28 +134,31 @@ export function stopMusic() {
 }
 
 export function playJump() {
+  if (!soundEnabled()) return;
   initSounds();
   if (jumpSound) {
     const sound = jumpSound.cloneNode();
-    sound.volume = jumpSound.volume;
+    sound.volume = scaledVolume(0.4);
     sound.play().catch(e => console.warn('[Sound] Jump play error:', e.message));
   }
 }
 
 export function playLose() {
+  if (!soundEnabled()) return;
   initSounds();
   if (loseSound) {
     const sound = loseSound.cloneNode();
-    sound.volume = loseSound.volume;
+    sound.volume = scaledVolume(0.5);
     sound.play().catch(e => console.warn('[Sound] Lose play error:', e.message));
   }
 }
 
 export function playCollect() {
+  if (!soundEnabled()) return;
   initSounds();
   if (collectSound) {
     const sound = collectSound.cloneNode();
-    sound.volume = COLLECT_SOUND_VOLUME;
+    sound.volume = scaledVolume(COLLECT_SOUND_VOLUME);
     sound.play().catch(e => console.warn('[Sound] Collect play error:', e.message));
   }
 }

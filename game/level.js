@@ -114,6 +114,10 @@ export function makeLevel(){
       if (isQuizPlat) {
         plat.type            = 'quiz_platform';
         plat._quizTriggered  = false;  // reset chaque génération
+        const difficulties = Array.isArray(window.quizQuestionDifficulties) ? window.quizQuestionDifficulties : [];
+        plat.difficulty = difficulties.length
+          ? difficulties[world.platforms.filter(p => p.type === 'quiz_platform').length % difficulties.length]
+          : 1;
         if (cfg.id === 1 && v === 0) plat.isTutorial = true;
         // Pas de décor ni ennemi sur les plateformes quiz
         world.platforms.push(plat);

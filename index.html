@@ -96,8 +96,16 @@
           <span id="pause-student-name">-</span> · <span id="pause-student-xp">0</span> XP
         </div>
 
+        <nav class="student-tabs" aria-label="Sections eleve">
+          <button type="button" class="student-tab active" data-student-tab="activities">Activites</button>
+          <button type="button" class="student-tab" data-student-tab="shop">Boutique</button>
+          <button type="button" class="student-tab" data-student-tab="inventory">Inventaire</button>
+          <button type="button" class="student-tab" data-student-tab="leaderboard">Classement</button>
+          <button type="button" class="student-tab" data-student-tab="settings">Parametres</button>
+        </nav>
+
         <main class="hub-main">
-          <section class="hub-section hub-activities">
+          <section class="hub-section hub-activities student-panel" id="student-panel-activities">
             <div class="section-head">
               <h2>Activites</h2>
               <p id="activities-hint">Selectionne une activite configuree par ton enseignant.</p>
@@ -107,6 +115,51 @@
               <span id="activity-mode-badge" class="mode-pill">LECON</span>
               <p id="activity-detail-text">-</p>
             </div>
+          </section>
+
+          <section class="hub-section student-panel hidden" id="student-panel-shop">
+            <div class="section-head split-head">
+              <div>
+                <h2>Boutique</h2>
+                <p>Depense tes pieces pour acheter des objets utilisables pendant l'aventure.</p>
+              </div>
+              <div class="wallet-pill"><span>Pieces</span><strong id="shop-wallet">0</strong></div>
+            </div>
+            <div id="shop-grid" class="shop-grid"></div>
+          </section>
+
+          <section class="hub-section student-panel hidden" id="student-panel-inventory">
+            <div class="section-head split-head">
+              <div>
+                <h2>Inventaire</h2>
+                <p>Utilise tes objets avant ou pendant une partie.</p>
+              </div>
+              <div class="wallet-pill"><span>Pieces</span><strong id="inventory-wallet">0</strong></div>
+            </div>
+            <div id="inventory-grid" class="inventory-grid"></div>
+          </section>
+
+          <section class="hub-section student-panel hidden" id="student-panel-leaderboard">
+            <div class="section-head">
+              <h2>Classement</h2>
+              <p>Compare ta progression avec les autres eleves de ta classe.</p>
+            </div>
+            <div id="student-leaderboard" class="student-leaderboard"></div>
+          </section>
+
+          <section class="hub-section student-panel hidden" id="student-panel-settings">
+            <div class="section-head">
+              <h2>Parametres</h2>
+              <p>Regle le confort du jeu sur cet appareil.</p>
+            </div>
+            <form id="student-settings-form" class="student-settings">
+              <label><span>Sons</span><input type="checkbox" id="student-set-sound"></label>
+              <label><span>Volume general</span><input type="range" id="student-set-volume" min="0" max="100" value="70"></label>
+              <label><span>Afficher les aides</span><input type="checkbox" id="student-set-hints"></label>
+              <label><span>Animations reduites</span><input type="checkbox" id="student-set-motion"></label>
+              <button type="submit" class="btn-primary btn-large">Enregistrer</button>
+              <p id="student-settings-feedback" class="settings-feedback"></p>
+            </form>
           </section>
 
           <aside class="hub-section hub-sidebar">
@@ -126,6 +179,7 @@
             <div class="hub-actions">
               <button type="button" id="menu-resume" class="btn-secondary btn-large hidden">Reprendre</button>
               <button type="button" id="menu-play" class="btn-primary btn-large btn-play" disabled>Jouer</button>
+              <button type="button" id="quick-inventory" class="btn-secondary btn-large">Inventaire</button>
               <button type="button" id="menu-quit" class="btn-ghost">Quitter la partie</button>
             </div>
           </aside>

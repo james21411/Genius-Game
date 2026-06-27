@@ -205,12 +205,23 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
       const hplat = plat.h;
       const theme = plat.theme || 0;
         if(plat.type === 'quiz_platform') {
-          ctx.fillStyle = '#f5c04a'; // Gold
+          const difficulty = parseInt(plat.difficulty) || 1;
+          const palette = difficulty >= 3
+            ? { top: '#ff6b6b', base: '#ef4444', edge: '#991b1b', label: 'D' }
+            : difficulty === 2
+              ? { top: '#fde68a', base: '#f59e0b', edge: '#92400e', label: 'I' }
+              : { top: '#86efac', base: '#22c55e', edge: '#166534', label: 'F' };
+          const grad = ctx.createLinearGradient(x, y, x, y + hplat);
+          grad.addColorStop(0, palette.top);
+          grad.addColorStop(1, palette.base);
+          ctx.fillStyle = grad;
           ctx.fillRect(x, y, wplat, hplat);
+          ctx.fillStyle = palette.edge;
+          ctx.fillRect(x, y + hplat - 5, wplat, 5);
           ctx.fillStyle = '#fff';
           ctx.font = 'bold 20px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText('?', x + wplat/2, y + hplat/2 + 6);
+          ctx.fillText(`? ${palette.label}`, x + wplat/2, y + hplat/2 + 6);
           
           // ── Mini-tutoriel ──
           if(plat.isTutorial && !plat._quizTriggered){
