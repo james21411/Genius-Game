@@ -7,6 +7,12 @@ import nipplejs from "nipplejs";
 export const input = { left:0, right:0, jump:false, shoot:false };
 export const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
+function isTypingTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
 export function initControls(){
   if(isMobile){
     const joyZone = document.getElementById('joy');
@@ -38,13 +44,19 @@ export function initControls(){
 
   } else {
     addEventListener('keydown', (e)=>{
+      if (isTypingTarget(e.target)) return;
+      const quizOpen = window.isQuizActive?.() || false;
       if(e.key === 'ArrowLeft' || e.key === 'a') input.left = -1;
       if(e.key === 'ArrowRight' || e.key === 'd') input.right = 1;
       // keep W and ArrowUp for jump; map Space to shoot so player can fire with spacebar
       if(e.key === 'w' || e.key === 'ArrowUp') input.jump = true;
-      if(e.key === ' ' || e.key === 'k' || e.key === 'K' || e.key === 'Control') input.shoot = true;
+      // Bloquer le tir quand quiz actif (overlay ouvert) pour éviter les tirs accidentels
+      if (!quizOpen) {
+        if(e.key === ' ' || e.key === 'k' || e.key === 'K' || e.key === 'Control') input.shoot = true;
+      }
     });
     addEventListener('keyup', (e)=>{
+      if (isTypingTarget(e.target)) return;
       if(e.key === 'ArrowLeft' || e.key === 'a') if(input.left<0) input.left = 0;
       if(e.key === 'ArrowRight' || e.key === 'd') if(input.right>0) input.right = 0;
       if(e.key === 'w' || e.key === 'ArrowUp') input.jump = false;

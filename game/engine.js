@@ -132,12 +132,14 @@ function loop(now){
 
   // Reading or answering pauses the world: enemies, projectiles and level timer stay still.
   if(window.isLivreActive){
+    player.invulnerable = Math.max(player.invulnerable || 0, 0.35);
     draw();
     requestAnimationFrame(loop);
     return;
   }
 
   if(isQuizActive()){
+    player.invulnerable = Math.max(player.invulnerable || 0, 0.35);
     updateQuiz(rawDt);
     draw();
     requestAnimationFrame(loop);
@@ -256,6 +258,11 @@ function loop(now){
             // Bonus vie si bonne réponse (optionnel)
             if(wasCorrect) score += 200;
           });
+        }
+        // ── Déclencher fin si plateforme d'arrivée (goal) ──────────
+        if(plat.type === 'goal'){
+          window.gameState = 'gameover';
+          window.updateMenuVisibility?.();
         }
       }
     }

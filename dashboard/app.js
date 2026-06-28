@@ -530,6 +530,17 @@ function openWorldModal(mode) {
   document.getElementById('world-topic-input').value = '';
   document.getElementById('world-subject-input').value = 'Mathematiques';
   document.getElementById('world-mode-input').value = mode;
+
+  // Afficher ou masquer le groupe du nombre max de tentatives (uniquement pour evaluation)
+  const attemptsGroup = document.getElementById('world-max-attempts-group');
+  if (attemptsGroup) {
+    attemptsGroup.style.display = isLesson ? 'none' : 'block';
+  }
+  const attemptsInput = document.getElementById('world-max-attempts-input');
+  if (attemptsInput) {
+    attemptsInput.value = '3';
+  }
+
   worldModal.classList.remove('hidden');
 }
 
@@ -547,10 +558,12 @@ worldForm.onsubmit = async (e) => {
   const topic = document.getElementById('world-topic-input').value;
   const subject = document.getElementById('world-subject-input').value;
   const mode = document.getElementById('world-mode-input').value;
+  const maxAttemptsInput = document.getElementById('world-max-attempts-input');
+  const max_attempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value) || 3 : 3;
 
   const url = worldId ? `${API}/worlds/${worldId}` : `${API}/worlds`;
   const method = worldId ? 'PUT' : 'POST';
-  const body = { class_id: parseInt(currentClassId), name, topic, subject, mode };
+  const body = { class_id: parseInt(currentClassId), name, topic, subject, mode, max_attempts };
 
   try {
     const res = await fetch(url, {
@@ -575,27 +588,54 @@ async function fetchWorldsList(modeFilter) {
     const tbodyId = modeFilter === 'lesson' ? 'lessons-list-body' : 'evaluations-list-body';
     const tbody = document.getElementById(tbodyId);
     if (!tbody) return;
-    tbody.innerHTML = filtered.map(w => `
-      <tr>
-        <td><strong>${w.name}</strong></td>
-        <td>${w.topic}</td>
-        <td>${w.subject}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="editWorld(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.topic.replace(/'/g, "\\'")}', '${w.subject.replace(/'/g, "\\'")}', '${w.mode}')">Modifier</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteWorld(${w.id})">Supprimer</button>
-        </td>
-      </tr>
-    `).join('') || `<tr><td colspan="4" class="text-center">Aucune ${modeFilter === 'lesson' ? 'lecon' : 'evaluation'}.</td></tr>`;
+
+    if (modeFilter === 'lesson') {
+      tbody.innerHTML = filtered.map(w => `
+        <tr>
+          <td><strong>${w.name}</strong></td>
+          <td>${w.topic}</td>
+          <td>${w.subject}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editWorld(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.topic.replace(/'/g, "\\'")}', '${w.subject.replace(/'/g, "\\'")}', '${w.mode}', ${w.max_attempts || 3})">Modifier</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteWorld(${w.id})">Supprimer</button>
+          </td>
+        </tr>
+      `).join('') || `<tr><td colspan="4" class="text-center">Aucune lecon.</td></tr>`;
+    } else {
+      tbody.innerHTML = filtered.map(w => `
+        <tr>
+          <td><strong>${w.name}</strong></td>
+          <td>${w.topic}</td>
+          <td>${w.subject}</td>
+          <td><span class="badge" style="background:#dc2626; color:#fff; padding: 2px 6px; border-radius:4px;">${w.max_attempts || 3}</span></td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editWorld(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.topic.replace(/'/g, "\\'")}', '${w.subject.replace(/'/g, "\\'")}', '${w.mode}', ${w.max_attempts || 3})">Modifier</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteWorld(${w.id})">Supprimer</button>
+          </td>
+        </tr>
+      `).join('') || `<tr><td colspan="5" class="text-center">Aucune evaluation.</td></tr>`;
+    }
   } catch (err) { console.error(err); }
 }
 
-window.editWorld = (id, name, topic, subject, mode) => {
+window.editWorld = (id, name, topic, subject, mode, maxAttempts = 3) => {
   document.getElementById('world-modal-title').textContent = mode === 'lesson' ? 'Modifier la lecon' : 'Modifier l\'evaluation';
   document.getElementById('modal-world-id').value = id;
   document.getElementById('world-name-input').value = name;
   document.getElementById('world-topic-input').value = topic;
   document.getElementById('world-subject-input').value = subject;
   document.getElementById('world-mode-input').value = mode;
+
+  // Afficher ou masquer le groupe du nombre max de tentatives (uniquement pour evaluation)
+  const attemptsGroup = document.getElementById('world-max-attempts-group');
+  if (attemptsGroup) {
+    attemptsGroup.style.display = mode === 'lesson' ? 'none' : 'block';
+  }
+  const attemptsInput = document.getElementById('world-max-attempts-input');
+  if (attemptsInput) {
+    attemptsInput.value = maxAttempts;
+  }
+
   worldModal.classList.remove('hidden');
 };
 

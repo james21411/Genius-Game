@@ -3,7 +3,7 @@ import { initControls } from './game/controls.js';
 import { world, player, makeLevel, setLevel } from './game/level.js';
 import { startEngine } from './game/engine.js';
 import { initRender } from './game/render.js';
-import { initQuizInput, loadQuestions, setSession, getStudentStats, isQuizActive } from './game/quiz_engine.js';
+import { initQuizInput, loadQuestions, setSession, getStudentStats, getQuizProgress, isQuizActive } from './game/quiz_engine.js';
 import { initChatbot } from './game/chatbot.js';
 import { initLivreDialog } from './game/livre_dialog.js';
 import { restartMusic, startMusic } from './game/sound.js';
@@ -20,6 +20,7 @@ initControls();
 initRender(canvas, world, player, assets, assetsReady);
 initQuizInput();
 window.isQuizActive = isQuizActive;
+window.getQuizProgress = getQuizProgress;
 initChatbot();
 initLivreDialog();
 
@@ -30,8 +31,23 @@ setLevel(1);
 makeLevel();
 startEngine(canvas, world, player);
 
+// ── Écran de chargement initial ──
+function initLoadingScreen() {
+  const loader = document.getElementById('loading-screen');
+  if (loader) {
+    setTimeout(() => {
+      loader.classList.add('fade-out');
+      setTimeout(() => {
+        loader.remove();
+      }, 500);
+    }, 5000);
+  }
+}
+initLoadingScreen();
+
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const menuOverlay = document.getElementById('menuOverlay');
+const roleScreen = document.getElementById('role-screen');
 const loginScreen = document.getElementById('login-screen');
 const hubScreen = document.getElementById('hub-screen');
 const loginError = document.getElementById('login-error');
@@ -72,6 +88,15 @@ const DEFAULT_STUDENT_SETTINGS = {
   volume: 70,
   hints: true,
   reducedMotion: false
+};
+
+const TIMED_ITEM_EFFECTS = {
+  immunity_potion: { key: 'immunityUntil', durationMs: 12000 },
+  coin_doubler: { key: 'coinMultiplierUntil', durationMs: 45000 },
+  quiz_slow: { key: 'quizSlowUntil', durationMs: 45000 },
+  enemy_freeze: { key: 'enemyFreezeUntil', durationMs: 8000 },
+  jump_boots: { key: 'jumpBootsUntil', durationMs: 40000 },
+  coin_magnet: { key: 'coinMagnetUntil', durationMs: 35000 }
 };
 
 function normalizeCode(raw) {
@@ -145,9 +170,34 @@ function getStudentEffects() {
   return window.studentItemEffects;
 }
 
+function getStudentEffectMeta() {
+  if (!window.studentItemEffectMeta) window.studentItemEffectMeta = {};
+  return window.studentItemEffectMeta;
+}
+
+function activateTimedItem(itemId) {
+  const config = TIMED_ITEM_EFFECTS[itemId];
+  if (!config) return;
+  const effects = getStudentEffects();
+  const meta = getStudentEffectMeta();
+  const now = Date.now();
+  const start = Math.max(now, effects[config.key] || 0);
+  const end = start + config.durationMs;
+  effects[config.key] = end;
+  meta[config.key] = { start, end, durationMs: config.durationMs };
+}
+
 function effectActive(key) {
   const effects = getStudentEffects();
   return Date.now() < (effects[key] || 0);
+}
+
+function getEffectProgress(key) {
+  const meta = getStudentEffectMeta()[key];
+  const end = getStudentEffects()[key] || 0;
+  if (!meta || !end || Date.now() >= end) return 0;
+  const duration = Math.max(1, meta.durationMs || (meta.end - meta.start) || 1);
+  return Math.max(0, Math.min(1, (end - Date.now()) / duration));
 }
 
 function formatEffectTime(key) {
@@ -245,8 +295,135 @@ function renderActiveEffects() {
     bar.className = 'active-effects-bar';
     inventoryGrid.before(bar);
   }
-  bar.innerHTML = badges.length ? badges.map(b => `<span>${escapeHtml(b)}</span>`).join('') : '<span>Aucun effet actif</span>';
+  bar.innerHTML = badges.length ? badges.map(b => `<span>${escapeHtml(b)}</span>`).join('') : '';
 }
+
+function getStudentHudItems() {
+  const economy = loadEconomy();
+  const inventory = economy.inventory || {};
+  const effects = getStudentEffects();
+  return SHOP_ITEMS.map(item => {
+    const timed = TIMED_ITEM_EFFECTS[item.id];
+    const progress = timed ? getEffectProgress(timed.key) : 0;
+    const activeCount = item.id === 'answer_shield' ? (effects.answerShield || 0) : 0;
+    const count = (inventory[item.id] || 0) + activeCount;
+    return {
+      id: item.id,
+      icon: item.icon,
+      label: item.label,
+      count,
+      progress,
+      active: progress > 0 || activeCount > 0
+    };
+  });
+}
+
+window.getStudentHudItems = getStudentHudItems;
+
+/**
+ * Renders owned/active inventory items as clickable buttons arranged in an arc
+ * around the joystick circle (#joy). Only visible during gameplay.
+ * Called every second and after every buy/use action.
+ */
+function renderHudItemsRing() {
+  const ring = document.getElementById('hud-items-ring');
+  if (!ring) return;
+
+  if (window.gameState !== 'playing') {
+    ring.innerHTML = '';
+    return;
+  }
+
+  const items = getStudentHudItems();
+  ring.innerHTML = '';
+
+  const isBig = window.innerWidth >= 900;
+  const slots = isBig ? 10 : 8;
+  const R = isBig ? 88 : 58;        // radius (slightly inside the ring border)
+  const cx = isBig ? 90 : 60;       // center x
+  const cy = isBig ? 90 : 60;       // center y
+
+  for (let i = 0; i < slots; i++) {
+    const item = items[i] || null;
+    // Start from top (-90°) so first item is at the top
+    const angleDeg = -90 + (i / slots) * 360;
+    const angleRad = (angleDeg * Math.PI) / 180;
+
+    const bx = cx + R * Math.cos(angleRad);
+    const by = cy + R * Math.sin(angleRad);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+
+    const hasItem = item && item.count > 0;
+    const isActive = item && item.active;
+
+    btn.className = 'hud-item-btn'
+      + (isActive ? ' active-effect' : '')
+      + (!hasItem ? ' disabled' : '');
+    btn.setAttribute('data-label', item ? (item.label || '') : '');
+    btn.style.left = `${bx}px`;
+    btn.style.top = `${by}px`;
+
+    // Icon
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = item ? (item.icon || '?') : '?';
+    iconSpan.style.pointerEvents = 'none';
+    btn.appendChild(iconSpan);
+
+    // Count badge — always visible, shows x0 when empty
+    const badge = document.createElement('span');
+    badge.className = 'hud-badge';
+    badge.textContent = item ? (item.count > 9 ? '9+' : String(item.count)) : '0';
+    btn.appendChild(badge);
+
+    // SVG arc for timed progress
+    if (item && item.progress > 0) {
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      const btnR = 20;
+      const circumference = 2 * Math.PI * btnR;
+      svg.setAttribute('viewBox', '0 0 48 48');
+      svg.style.cssText = 'position:absolute;inset:-2px;width:40px;height:40px;transform:rotate(-90deg);pointer-events:none;';
+
+      const trackCircle = document.createElementNS(svgNS, 'circle');
+      trackCircle.setAttribute('cx', '24');
+      trackCircle.setAttribute('cy', '24');
+      trackCircle.setAttribute('r', String(btnR));
+      trackCircle.setAttribute('fill', 'none');
+      trackCircle.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+      trackCircle.setAttribute('stroke-width', '3');
+      svg.appendChild(trackCircle);
+
+      const arcCircle = document.createElementNS(svgNS, 'circle');
+      arcCircle.setAttribute('cx', '24');
+      arcCircle.setAttribute('cy', '24');
+      arcCircle.setAttribute('r', String(btnR));
+      arcCircle.setAttribute('fill', 'none');
+      const color = item.progress > 0.5 ? '#55cfb3' : item.progress > 0.25 ? '#f5c04a' : '#e74c3c';
+      arcCircle.setAttribute('stroke', color);
+      arcCircle.setAttribute('stroke-width', '3');
+      arcCircle.setAttribute('stroke-linecap', 'round');
+      arcCircle.setAttribute('stroke-dasharray', String(circumference));
+      arcCircle.setAttribute('stroke-dashoffset', String(circumference * (1 - item.progress)));
+      svg.appendChild(arcCircle);
+
+      btn.appendChild(svg);
+    }
+
+    // Click — only if item exists and count > 0
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!item || item.count <= 0) return;
+      useInventoryItem(item.id);
+      renderHudItemsRing();
+    });
+
+    ring.appendChild(btn);
+  }
+}
+
+window.renderHudItemsRing = renderHudItemsRing;
 
 function buyShopItem(itemId) {
   const item = itemById(itemId);
@@ -258,6 +435,7 @@ function buyShopItem(itemId) {
   economy.inventory[item.id] = (economy.inventory[item.id] || 0) + 1;
   saveEconomy(economy);
   renderShopAndInventory();
+  renderHudItemsRing();
 }
 
 function consumeInventoryItem(itemId) {
@@ -274,16 +452,16 @@ function useInventoryItem(itemId) {
   const item = itemById(itemId);
   if (!item || !consumeInventoryItem(itemId)) return;
   const effects = getStudentEffects();
-  const now = Date.now();
 
   if (itemId === 'immunity_potion') {
+    activateTimedItem(itemId);
     player.invulnerable = Math.max(player.invulnerable || 0, 12);
     showFloatingNotice('Immunise 12s');
   } else if (itemId === 'coin_doubler') {
-    effects.coinMultiplierUntil = Math.max(effects.coinMultiplierUntil || 0, now) + 45000;
+    activateTimedItem(itemId);
     showFloatingNotice('Pieces x2');
   } else if (itemId === 'quiz_slow') {
-    effects.quizSlowUntil = Math.max(effects.quizSlowUntil || 0, now) + 45000;
+    activateTimedItem(itemId);
     showFloatingNotice('Questions ralenties');
   } else if (itemId === 'heart_kit') {
     player.lives = Math.min(5, (player.lives || 0) + 2);
@@ -295,13 +473,13 @@ function useInventoryItem(itemId) {
     window.levelTimer = (typeof window.levelTimer === 'number' ? window.levelTimer : 600) + 60;
     showFloatingNotice('+60s');
   } else if (itemId === 'enemy_freeze') {
-    effects.enemyFreezeUntil = Math.max(effects.enemyFreezeUntil || 0, now) + 8000;
+    activateTimedItem(itemId);
     showFloatingNotice('Ennemis figes');
   } else if (itemId === 'jump_boots') {
-    effects.jumpBootsUntil = Math.max(effects.jumpBootsUntil || 0, now) + 40000;
+    activateTimedItem(itemId);
     showFloatingNotice('Triple saut');
   } else if (itemId === 'coin_magnet') {
-    effects.coinMagnetUntil = Math.max(effects.coinMagnetUntil || 0, now) + 35000;
+    activateTimedItem(itemId);
     showFloatingNotice('Aimant active');
   } else if (itemId === 'answer_shield') {
     effects.answerShield = (effects.answerShield || 0) + 1;
@@ -309,6 +487,7 @@ function useInventoryItem(itemId) {
   }
 
   renderShopAndInventory();
+  renderHudItemsRing();
 }
 
 window.consumeAnswerShield = function consumeAnswerShield() {
@@ -317,6 +496,7 @@ window.consumeAnswerShield = function consumeAnswerShield() {
   effects.answerShield -= 1;
   showFloatingNotice('Bouclier erreur');
   renderShopAndInventory();
+  renderHudItemsRing();
   return true;
 };
 
@@ -466,7 +646,16 @@ function clearStudentProfile() {
   selectedActivity = null;
 }
 
+function showRoleScreen() {
+  roleScreen?.classList.remove('hidden');
+  loginScreen?.classList.add('hidden');
+  hubScreen?.classList.add('hidden');
+  hideLoginError();
+  if (menuPlay) menuPlay.disabled = true;
+}
+
 function showLoginScreen() {
+  roleScreen?.classList.add('hidden');
   loginScreen?.classList.remove('hidden');
   hubScreen?.classList.add('hidden');
   hideLoginError();
@@ -474,6 +663,7 @@ function showLoginScreen() {
 }
 
 function showHubScreen() {
+  roleScreen?.classList.add('hidden');
   loginScreen?.classList.add('hidden');
   hubScreen?.classList.remove('hidden');
   if (hubWelcome && studentProfile) {
@@ -520,9 +710,10 @@ async function fetchActivities() {
   try {
     const joinData = await joinClass(studentProfile.name, studentProfile.code);
     studentProfile.class_id = joinData.class_id;
+    studentProfile.id = joinData.id;
     saveStudentProfile(studentProfile.name, studentProfile.code, joinData.class_id);
 
-    const wRes = await fetch(`${API}/classes/${joinData.class_id}/worlds`);
+    const wRes = await fetch(`${API}/classes/${joinData.class_id}/worlds?student_id=${joinData.id}`);
     if (!wRes.ok) throw new Error('Impossible de charger les activites.');
     allActivities = await wRes.json();
     await fetchClassStudents();
@@ -559,11 +750,25 @@ function renderActivities() {
     const badgeClass = isEval ? 'act-badge-eval' : 'act-badge-lesson';
     const badgeLabel = isEval ? 'EVALUATION' : 'LECON';
     const selected = selectedActivity?.id === a.id ? ' selected' : '';
+    
+    let attemptsText = '';
+    if (isEval) {
+      const maxAttempts = a.max_attempts || 3;
+      const doneAttempts = a.student_attempts || 0;
+      const isExhausted = doneAttempts >= maxAttempts;
+      attemptsText = `
+        <div class="attempts-info" style="font-size:12px; margin-top:6px; font-weight:bold; color:${isExhausted ? '#ff5f8f' : '#b29cff'};">
+          Tentatives : ${doneAttempts} / ${maxAttempts}
+        </div>
+      `;
+    }
+    
     return `
       <button type="button" class="activity-card${selected}" data-id="${a.id}">
         <h3>${escapeHtml(a.name)}</h3>
         <p>${escapeHtml(a.topic)} — ${escapeHtml(a.subject)}</p>
         <span class="act-badge ${badgeClass}">${badgeLabel}</span>
+        ${attemptsText}
       </button>
     `;
   }).join('');
@@ -603,12 +808,41 @@ function selectActivity(id) {
   window.gameMode = selectedActivity.mode;
   activityModeBadge.textContent = isEval ? 'EVALUATION' : 'LECON';
   activityModeBadge.style.background = isEval ? '#dc2626' : '#1d4ed8';
-  activityDetailText.textContent = `${selectedActivity.topic} (${selectedActivity.subject}) — mode fixe par l'enseignant`;
+  
+  let detailText = `${selectedActivity.topic} (${selectedActivity.subject}) — mode fixe par l'enseignant`;
+  if (isEval) {
+    const maxAttempts = selectedActivity.max_attempts || 3;
+    const doneAttempts = selectedActivity.student_attempts || 0;
+    detailText += ` · ${maxAttempts} tentatives autorisées (faites : ${doneAttempts}/${maxAttempts})`;
+  }
+  activityDetailText.textContent = detailText;
+  
   updatePlayButton();
 }
 
 function updatePlayButton() {
-  if (menuPlay) menuPlay.disabled = !selectedActivity;
+  if (!selectedActivity) {
+    if (menuPlay) menuPlay.disabled = true;
+    return;
+  }
+  
+  const isEval = selectedActivity.mode === 'eval';
+  if (isEval) {
+    const maxAttempts = selectedActivity.max_attempts || 3;
+    const doneAttempts = selectedActivity.student_attempts || 0;
+    if (doneAttempts >= maxAttempts) {
+      if (menuPlay) {
+        menuPlay.disabled = true;
+        menuPlay.textContent = 'Tentatives épuisées';
+      }
+      return;
+    }
+  }
+  
+  if (menuPlay) {
+    menuPlay.disabled = false;
+    menuPlay.textContent = window._prevStateBeforePause === 'playing' ? 'Nouvelle partie' : 'Jouer';
+  }
 }
 
 async function verifyClass(e) {
@@ -649,6 +883,15 @@ document.getElementById('class-code')?.addEventListener('keydown', (e) => {
 document.getElementById('student-name')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('class-code')?.focus();
 });
+document.getElementById('btn-role-student')?.addEventListener('click', () => {
+  if (studentProfile?.name && studentProfile?.code) {
+    showHubScreen();
+    fetchActivities();
+  } else {
+    showLoginScreen();
+    setCharacterEnabled(false);
+  }
+});
 
 setupStudentTabs();
 setupStudentSettings();
@@ -656,25 +899,21 @@ renderShopAndInventory();
 setInterval(() => {
   syncRunCoinsToWallet();
   renderActiveEffects();
+  renderHudItemsRing();
 }, 1000);
 
 document.getElementById('btn-change-profile')?.addEventListener('click', () => {
   if (confirm('Changer de compte ? Tu devras ressaisir ton nom et ton code.')) {
     clearStudentProfile();
-    showLoginScreen();
+    showRoleScreen();
     setCharacterEnabled(false);
     if (activitiesList) activitiesList.innerHTML = '';
     if (activitiesHint) activitiesHint.textContent = 'Selectionne une activite configuree par ton enseignant.';
   }
 });
 
-if (studentProfile?.name && studentProfile?.code) {
-  showHubScreen();
-  fetchActivities();
-} else {
-  showLoginScreen();
-  setCharacterEnabled(false);
-}
+showRoleScreen();
+setCharacterEnabled(false);
 
 // ── Jeu ───────────────────────────────────────────────────────────────────────
 async function startGame() {
@@ -709,6 +948,11 @@ async function startGame() {
         world_id: selectedActivity.id,
         name: studentName
       });
+      // Synchronisation en temps réel du nombre de tentatives
+      await fetchActivities();
+      if (selectedActivity) {
+        selectedActivity = allActivities.find(a => a.id === selectedActivity.id);
+      }
     }
   } catch (err) {
     console.warn('Session non enregistree:', err);
@@ -732,6 +976,7 @@ async function startGame() {
   window.gameState = 'playing';
   import('./game/engine.js').then(mod => { if (mod?.respawn) mod.respawn(); });
   updateMenuVisibility();
+  renderHudItemsRing();
 }
 
 function updateMenuVisibility() {
@@ -744,15 +989,23 @@ function updateMenuVisibility() {
 
   const quizActive = typeof window.isQuizActive === 'function' ? window.isQuizActive() : false;
   const gameplayVisible = window.gameState === 'playing' && !window.isLivreActive;
+  const isGameOver = window.gameState === 'gameover';
   const inGameLoop = gameplayVisible;
 
   document.body.classList.toggle('in-gameplay', inGameLoop);
 
-  if (gameplayVisible) {
+  if (gameplayVisible || isGameOver) {
     if (document.activeElement && !quizActive) document.activeElement.blur();
     menuOverlay.classList.add('hidden');
-    pauseBtn.classList.toggle('hidden', quizActive);
-    menuOverlay.setAttribute('aria-hidden', 'true');
+    pauseBtn.classList.add('hidden'); // pause button hidden on gameover/quiz
+    
+    if (isGameOver) {
+      document.getElementById('gameover-overlay')?.classList.remove('hidden');
+    } else {
+      document.getElementById('gameover-overlay')?.classList.add('hidden');
+      pauseBtn.classList.toggle('hidden', quizActive);
+    }
+
     if (chatbotToggle) {
       chatbotToggle.style.display = inGameLoop ? '' : 'none';
       if (inGameLoop && (!chatbotPanel || chatbotPanel.classList.contains('hidden'))) {
@@ -763,6 +1016,7 @@ function updateMenuVisibility() {
   } else {
     if (studentProfile) startMusic();
     menuOverlay.classList.remove('hidden');
+    document.getElementById('gameover-overlay')?.classList.add('hidden');
     pauseBtn.classList.add('hidden');
     menuOverlay.setAttribute('aria-hidden', 'false');
     if (chatbotToggle) chatbotToggle.style.display = 'none';
@@ -777,6 +1031,7 @@ function updateMenuVisibility() {
     if (window._prevStateBeforePause === 'playing' && window.gameState === 'menu') {
       menuResume?.classList.remove('hidden');
       if (menuPlay) menuPlay.textContent = 'Nouvelle partie';
+      roleScreen?.classList.add('hidden');
       hubScreen?.classList.remove('hidden');
       loginScreen?.classList.add('hidden');
       if (xpDisplay) {
@@ -788,20 +1043,27 @@ function updateMenuVisibility() {
     } else {
       menuResume?.classList.add('hidden');
       if (menuPlay) menuPlay.textContent = 'Jouer';
-      if (studentProfile) showHubScreen();
-      else showLoginScreen();
+      if (roleScreen && !roleScreen.classList.contains('hidden')) {
+        showRoleScreen();
+      } else if (studentProfile) {
+        showHubScreen();
+      } else {
+        showRoleScreen();
+      }
       if (xpDisplay) xpDisplay.classList.add('hidden');
     }
   }
 }
 window.updateMenuVisibility = updateMenuVisibility;
 updateMenuVisibility();
+renderHudItemsRing();
 
 menuResume?.addEventListener('click', () => {
   if (window._prevStateBeforePause === 'playing') {
     window.gameState = 'playing';
     window._prevStateBeforePause = null;
     updateMenuVisibility();
+    renderHudItemsRing();
   }
 });
 
@@ -811,6 +1073,7 @@ menuQuit?.addEventListener('click', () => {
   window.gameState = 'menu';
   window._prevStateBeforePause = null;
   updateMenuVisibility();
+  renderHudItemsRing();
 });
 
 pauseBtn.addEventListener('click', () => {
@@ -821,6 +1084,7 @@ pauseBtn.addEventListener('click', () => {
     window.gameState = 'playing';
   }
   updateMenuVisibility();
+  renderHudItemsRing();
 });
 
 canvas.addEventListener('click', () => {
@@ -834,7 +1098,135 @@ canvas.addEventListener('click', () => {
       return;
     }
   } else if (window.gameState === 'gameover') {
+    const modal = document.getElementById('session-summary-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+      return; // Bloquer le redémarrage pendant le bilan
+    }
     startGame();
   }
   updateMenuVisibility();
+  renderHudItemsRing();
+});
+
+// ── Fonctionnalité du Bilan de Session ──
+function showSessionSummary() {
+  const modal = document.getElementById('session-summary-modal');
+  if (!modal) return;
+
+  const progress = getQuizProgress();
+  const isEval = selectedActivity?.mode === 'eval';
+
+  const title = document.getElementById('summary-title');
+  if (title && selectedActivity) {
+    title.textContent = `Bilan : ${selectedActivity.name}`;
+  }
+
+  const badge = document.getElementById('summary-mode-badge');
+  if (badge) {
+    badge.textContent = isEval ? 'ÉVALUATION' : 'LEÇON';
+    badge.className = `badge ${isEval ? 'eval' : 'lesson'}`;
+  }
+
+  const xpVal = document.getElementById('summary-xp-val');
+  if (xpVal) {
+    xpVal.textContent = `+${progress.xp} XP`;
+  }
+
+  const gradeCard = document.getElementById('summary-grade-card');
+  if (gradeCard) {
+    gradeCard.style.display = isEval ? '' : 'none';
+  }
+
+  const gradeVal = document.getElementById('summary-grade-val');
+  if (gradeVal && progress.total > 0) {
+    const rate = Math.round((progress.correct / progress.total) * 100);
+    const grade = ((progress.correct / progress.total) * 20).toFixed(1);
+    gradeVal.textContent = `${rate}% (${grade}/20)`;
+  } else if (gradeVal) {
+    gradeVal.textContent = '0% (0/20)';
+  }
+
+  const attemptsVal = document.getElementById('summary-attempts-val');
+  if (attemptsVal && selectedActivity) {
+    const doneAttempts = selectedActivity.student_attempts || 0;
+    const maxAttempts = selectedActivity.max_attempts || 3;
+    attemptsVal.textContent = isEval ? `${doneAttempts} / ${maxAttempts}` : `${doneAttempts} (Non limité)`;
+  }
+
+  const invList = document.getElementById('summary-inventory-list');
+  if (invList) {
+    const hudItems = getStudentHudItems();
+    const economy = loadEconomy();
+    const coins = economy.wallet || 0;
+    let invHtml = `<div class="summary-inv-item">🪙 ${coins} pièces</div>`;
+    if (hudItems && hudItems.length > 0) {
+      invHtml += hudItems.map(item => `
+        <div class="summary-inv-item">
+          <span>${item.icon}</span>
+          <span>${item.label} (x${item.count})</span>
+        </div>
+      `).join('');
+    } else {
+      invHtml += `<div class="summary-inv-empty">Aucun objet dans le sac</div>`;
+    }
+    invList.innerHTML = invHtml;
+  }
+
+  const missedList = document.getElementById('summary-missed-list');
+  if (missedList) {
+    const failedQs = window.failedQuestionsThisRun || [];
+    if (failedQs.length === 0) {
+      missedList.innerHTML = `
+        <div class="summary-no-missed">
+          🌟 Sans-faute ! Félicitations, tu as répondu correctement à toutes les questions !
+        </div>
+      `;
+    } else {
+      missedList.innerHTML = failedQs.map(q => {
+        const explanation = q.explanation ? `<div class="summary-missed-exp">💡 Règle pédagogique : ${escapeHtml(q.explanation)}</div>` : '';
+        return `
+          <div class="summary-missed-item">
+            <div class="summary-missed-q">Question : ${escapeHtml(q.question)}</div>
+            <div class="summary-missed-ans">Ta réponse : ${escapeHtml(Array.isArray(q.given_answer) ? q.given_answer.join(', ') : q.given_answer || 'Aucune')}</div>
+            <div class="summary-missed-correct">Réponse correcte : ${escapeHtml(Array.isArray(q.correct_answer) ? q.correct_answer.join(', ') : q.correct_answer)}</div>
+            ${explanation}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  modal.classList.remove('hidden');
+}
+
+const btnSummaryClose = document.getElementById('btn-summary-close');
+btnSummaryClose?.addEventListener('click', async () => {
+  const modal = document.getElementById('session-summary-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  window.gameState = 'menu';
+  window._prevStateBeforePause = null;
+  
+  await fetchActivities();
+  if (selectedActivity) {
+    selectActivity(selectedActivity.id);
+  }
+  
+  updateMenuVisibility();
+  renderHudItemsRing();
+});
+
+// ── Game Over → Bilan ──
+const btnGameOverSummary = document.getElementById('btn-gameover-summary');
+btnGameOverSummary?.addEventListener('click', async () => {
+  document.getElementById('gameover-overlay')?.classList.add('hidden');
+  // Rafraîchir les données de l'activité avant d'afficher le bilan
+  if (studentProfile?.code) {
+    try { await fetchActivities(); } catch (_) {}
+    if (selectedActivity) {
+      selectedActivity = allActivities.find(a => a.id === selectedActivity.id);
+    }
+  }
+  showSessionSummary();
 });

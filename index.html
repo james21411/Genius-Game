@@ -17,6 +17,17 @@
   </script>
 </head>
 <body>
+  <!-- Ecran de chargement anime -->
+  <div id="loading-screen">
+    <div class="loading-content">
+      <img src="logo_genius.png" alt="Genius Logo" class="loading-logo">
+      <div class="loading-bar-container">
+        <div class="loading-bar-fill"></div>
+      </div>
+      <div class="loading-text">Chargement de Genius Jump...</div>
+    </div>
+  </div>
+
   <canvas id="game"></canvas>
 
   <div id="quizOverlay" class="hidden" aria-hidden="true">
@@ -41,11 +52,38 @@
   <div id="menuOverlay" role="dialog">
     <div class="menu-shell">
 
+      <!-- Ecran choix du profil -->
+      <div id="role-screen" class="menu-screen">
+        <div class="login-layout role-layout">
+          <div class="login-brand">
+            <div class="login-brand-copy">
+              <img src="logo_genius.png" alt="Genius Logo" class="login-logo-img">
+              <span class="login-kicker">Genius Jump EDU</span>
+              <h1>Choisis ton <span>espace</span></h1>
+              <p>Entre comme eleve pour jouer, ou comme enseignant pour preparer les classes et les activites.</p>
+            </div>
+            <div class="login-banner-card" aria-hidden="true">
+              <img src="banner10.png" alt="">
+            </div>
+          </div>
+          <div class="login-card role-card">
+            <span class="login-card-kicker">Connexion</span>
+            <h2>Tu veux te connecter comment ?</h2>
+            <p class="login-card-intro">Choisis ton role pour acceder au bon espace.</p>
+            <div class="role-actions">
+              <button type="button" id="btn-role-student" class="btn-primary btn-large">Se connecter en tant qu'eleve</button>
+              <a href="./dashboard/index.html" id="btn-role-teacher" class="btn-secondary btn-large role-link">Se connecter en tant qu'enseignant</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Ecran connexion -->
-      <div id="login-screen" class="menu-screen">
+      <div id="login-screen" class="menu-screen hidden">
         <div class="login-layout">
           <div class="login-brand">
             <div class="login-brand-copy">
+              <img src="logo_genius.png" alt="Genius Logo" class="login-logo-img">
               <span class="login-kicker">Portail eleve</span>
               <h1>Genius Jump <span>EDU</span></h1>
               <p>Entre dans ton niveau, choisis ton heros et transforme les questions de classe en aventure.</p>
@@ -69,7 +107,6 @@
             </div>
             <p id="login-error" class="login-error hidden"></p>
             <button type="button" id="btn-verify-class" class="btn-primary btn-large">Se connecter</button>
-            <a href="./dashboard/index.html" class="link-prof" target="_blank">Espace enseignant</a>
           </div>
         </div>
       </div>
@@ -79,30 +116,28 @@
         <div class="hub-banner" aria-hidden="true"></div>
         <header class="hub-header">
           <div class="hub-header-left">
-            <h1>Genius Jump <span>EDU</span></h1>
+            <div class="hub-header-brand">
+              <img src="logo_genius.png" alt="Genius Logo" class="hub-logo-img">
+              <h1>Genius Jump <span>EDU</span></h1>
+            </div>
             <p id="hub-welcome">Bienvenue</p>
           </div>
           <div class="hub-header-right">
-            <div class="hub-badge">
-              <span class="hub-badge-label">Classe</span>
-              <strong id="profile-class-code">-</strong>
-            </div>
+            <nav class="student-tabs" aria-label="Sections eleve">
+              <button type="button" class="student-tab active" data-student-tab="activities"><img class="tab-icon" src="icones/question.png" alt=""> Activites</button>
+              <button type="button" class="student-tab" data-student-tab="shop"><img class="tab-icon" src="icones/session.png" alt=""> Boutique</button>
+              <button type="button" class="student-tab" data-student-tab="inventory"><img class="tab-icon" src="icones/boar.png" alt=""> Inventaire</button>
+              <button type="button" class="student-tab" data-student-tab="leaderboard"><img class="tab-icon" src="icones/classement.png" alt=""> Classement</button>
+              <button type="button" class="student-tab" data-student-tab="settings"><img class="tab-icon" src="icones/evaluation.png" alt=""> Parametres</button>
+            </nav>
+            <div class="hub-badge"><span class="hub-badge-label">Classe :</span> <strong id="profile-class-code">-</strong></div>
             <button type="button" id="btn-change-profile" class="btn-ghost">Changer de compte</button>
-            <a href="./dashboard/index.html" class="btn-ghost" target="_blank">Espace prof</a>
           </div>
         </header>
 
         <div id="menu-xp-display" class="pause-stats hidden">
           <span id="pause-student-name">-</span> · <span id="pause-student-xp">0</span> XP
         </div>
-
-        <nav class="student-tabs" aria-label="Sections eleve">
-          <button type="button" class="student-tab active" data-student-tab="activities">Activites</button>
-          <button type="button" class="student-tab" data-student-tab="shop">Boutique</button>
-          <button type="button" class="student-tab" data-student-tab="inventory">Inventaire</button>
-          <button type="button" class="student-tab" data-student-tab="leaderboard">Classement</button>
-          <button type="button" class="student-tab" data-student-tab="settings">Parametres</button>
-        </nav>
 
         <main class="hub-main">
           <section class="hub-section hub-activities student-panel" id="student-panel-activities">
@@ -123,7 +158,7 @@
                 <h2>Boutique</h2>
                 <p>Depense tes pieces pour acheter des objets utilisables pendant l'aventure.</p>
               </div>
-              <div class="wallet-pill"><span>Pieces</span><strong id="shop-wallet">0</strong></div>
+              <div class="wallet-pill">🪙 <strong id="shop-wallet">0</strong></div>
             </div>
             <div id="shop-grid" class="shop-grid"></div>
           </section>
@@ -134,7 +169,7 @@
                 <h2>Inventaire</h2>
                 <p>Utilise tes objets avant ou pendant une partie.</p>
               </div>
-              <div class="wallet-pill"><span>Pieces</span><strong id="inventory-wallet">0</strong></div>
+              <div class="wallet-pill">🪙 <strong id="inventory-wallet">0</strong></div>
             </div>
             <div id="inventory-grid" class="inventory-grid"></div>
           </section>
@@ -191,6 +226,7 @@
 
   <div id="controls">
     <div id="joy"></div>
+    <div id="hud-items-ring" aria-label="Objets actifs"></div>
     <button id="jump" aria-label="Saut">▲</button>
     <div id="hud"></div>
     <button id="pauseBtn" aria-label="Pause">⏸</button>
@@ -251,6 +287,64 @@
       <input type="text" id="chatbotInput" placeholder="Pose-moi une question..." autocomplete="off" class="chatbot-input" required>
       <button type="submit" id="chatbotSend" class="chatbot-send-btn">Envoyer</button>
     </form>
+  </div>
+
+  <!-- Ecran Game Over avec bouton Voir le bilan -->
+  <div id="gameover-overlay" class="hidden" role="dialog" aria-modal="true">
+    <div class="gameover-content">
+      <div class="gameover-icon">🏆</div>
+      <h2 class="gameover-title">Partie Terminée !</h2>
+      <p class="gameover-sub">Bravo, tu as utilise toutes tes tentatives.</p>
+      <button type="button" id="btn-gameover-summary" class="arcade-btn green-btn gameover-btn">Voir mon bilan</button>
+    </div>
+  </div>
+
+  <!-- Modal Bilan de Fin de Session -->
+  <div id="session-summary-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="summary-modal-content">
+      <div class="summary-modal-header">
+        <h2 id="summary-title">Bilan de ta partie</h2>
+        <span id="summary-mode-badge" class="badge">Mode</span>
+      </div>
+      <div class="summary-modal-body">
+        
+        <!-- Score Card (XP / Moyenne) -->
+        <div class="summary-stats-grid">
+          <div class="summary-stat-card">
+            <span class="stat-label">Points d'XP Gagnés</span>
+            <strong id="summary-xp-val" class="stat-value">+0 XP</strong>
+          </div>
+          <div class="summary-stat-card" id="summary-grade-card">
+            <span class="stat-label">Moyenne de Réussite</span>
+            <strong id="summary-grade-val" class="stat-value">0%</strong>
+          </div>
+          <div class="summary-stat-card">
+            <span class="stat-label">Tentatives Consommées</span>
+            <strong id="summary-attempts-val" class="stat-value">1 / 3</strong>
+          </div>
+        </div>
+
+        <!-- Inventory Status -->
+        <div class="summary-section">
+          <h3>📦 Ton Inventaire Actuel</h3>
+          <div id="summary-inventory-list" class="summary-inventory-list">
+            <!-- Dynamically populated inventory items -->
+          </div>
+        </div>
+
+        <!-- Missed Questions -->
+        <div class="summary-section">
+          <h3>❌ Questions Ratées</h3>
+          <div id="summary-missed-list" class="summary-missed-list">
+            <!-- Dynamically populated failed questions with explanations -->
+          </div>
+        </div>
+
+      </div>
+      <div class="summary-modal-footer">
+        <button type="button" id="btn-summary-close" class="arcade-btn green-btn">Retour au Menu principal</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="main.js"></script>

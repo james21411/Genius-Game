@@ -53,7 +53,11 @@ function _studentEffectActive(key) {
 export async function loadQuestions(worldId) {
   _questionPool = [];
   _poolIndex = 0;
+  _questionsTotal = 0;
+  _questionsCorrect = 0;
+  _xpGained = 0;
   window.quizQuestionDifficulties = [];
+  window.failedQuestionsThisRun = [];
 
   if (!worldId) {
     console.warn('[Quiz] Aucune activite selectionnee — pas de questions chargees.');
@@ -102,6 +106,17 @@ export function getStudentStats() {
     total: _questionsTotal, 
     correct: _questionsCorrect,
     name: _session ? _session.name : null
+  };
+}
+
+export function getQuizProgress() {
+  const total = Math.max(0, _questionPool.length);
+  const answered = total ? Math.min(_questionsTotal, total) : 0;
+  return {
+    answered,
+    total,
+    ratio: total ? answered / total : 0,
+    mode: window.gameMode || 'lesson'
   };
 }
 
@@ -160,7 +175,6 @@ export function updateQuiz(dt) {
 
     case 'active':
       if (_lessonReading) {
-        _syncOverlay();
         break;
       }
       _timer -= dt * (_studentEffectActive('quizSlowUntil') ? 0.45 : 1);
@@ -776,7 +790,7 @@ function _syncOverlay() {
     
     let formattedText = textPattern;
     dropdowns.forEach((options, idx) => {
-      let selectHtml = `<select class="mw-select-element" data-idx="${idx}" style="background: #1a2238; color: #fff; border: 1px solid #555; padding: 4px 8px; border-radius: 4px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; margin: 0 4px; outline: none; vertical-align: middle;">`;
+      let selectHtml = `<select class="mw-select-element" data-idx="${idx}">`;
       selectHtml += `<option value="">-- choisir --</option>`;
       options.forEach(opt => {
         selectHtml += `<option value="${opt}">${opt}</option>`;
@@ -785,7 +799,7 @@ function _syncOverlay() {
       formattedText = formattedText.replace(`{select${idx}}`, selectHtml);
     });
     
-    qText.innerHTML = `<div style="font-size: 16px; line-height: 1.6; color: #fff; margin-bottom: 15px;">${formattedText}</div>`;
+    qText.innerHTML = `<div class="missing-words-question-text">${formattedText}</div>`;
     
     answersContainer.innerHTML = `
       <button type="button" id="mwValidateBtn" class="arcade-btn green-btn" style="width: 100%; display: block; font-family: 'Press Start 2P'; font-size: 10px; padding: 10px;">VALIDER LES RÉPONSES</button>
@@ -969,6 +983,18 @@ function _resolveAnswer(choice) {
     _questionsCorrect++;
     _spawnConfetti();
   } else {
+    // Save to failed questions list
+    window.failedQuestionsThisRun = window.failedQuestionsThisRun || [];
+    if (_question && !window.failedQuestionsThisRun.some(q => q.id === _question.id)) {
+      window.failedQuestionsThisRun.push({
+        id: _question.id,
+        question: _question.question,
+        correct_answer: _question.correct_answer,
+        explanation: _question.explanation,
+        given_answer: choice
+      });
+    }
+
     const shielded = window.gameMode !== 'lesson' && window.consumeAnswerShield?.();
     if (!shielded) {
       playLose();

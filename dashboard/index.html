@@ -14,7 +14,7 @@
   <div id="auth-overlay" class="auth-overlay">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="auth-logo-mark">GJ</div>
+        <img src="../logo_genius.png" alt="Genius Logo" class="auth-logo-img">
         <h2>GUILDE DES MAITRES</h2>
         <p>Configuration pedagogique Genius Jump</p>
       </div>
@@ -62,7 +62,7 @@
     <aside class="sidebar">
       <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Reduire le menu" aria-expanded="true" title="Reduire le menu">&lt;</button>
       <div class="sidebar-brand">
-        <div class="brand-mark">GJ</div>
+        <img src="../logo_genius.png" alt="Genius Logo" class="brand-logo-img">
         <div class="brand-details">
           <h3>GENIUS JUMP</h3>
           <span>Portail Enseignant</span>
@@ -421,13 +421,14 @@
           <div class="card-body">
             <table class="data-table">
               <thead>
-                <tr><th>Nom</th><th>Theme</th><th>Matiere</th><th>Actions</th></tr>
+                <tr><th>Nom</th><th>Theme</th><th>Matiere</th><th>Tentatives max</th><th>Actions</th></tr>
               </thead>
               <tbody id="evaluations-list-body"></tbody>
             </table>
           </div>
         </div>
       </section>
+
 
       <section id="panel-questions" class="tab-panel hidden">
         <div class="questions-toolbar">
@@ -856,6 +857,11 @@
         <div class="form-group">
           <label for="world-subject-input">Matiere</label>
           <input type="text" id="world-subject-input" value="Mathematiques">
+        </div>
+        <div class="form-group" id="world-max-attempts-group" style="display:none">
+          <label for="world-max-attempts-input">Nombre max de tentatives</label>
+          <input type="number" id="world-max-attempts-input" min="1" value="3">
+          <small style="color:#94a3b8">Quand l'eleve atteint ce nombre en mode evaluation, un game over est declenche avec bilan.</small>
         </div>
         <div class="modal-buttons">
           <button type="button" id="btn-close-world-modal" class="btn btn-secondary">Annuler</button>

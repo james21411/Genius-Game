@@ -48,6 +48,56 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
     ctx.restore();
   }
 
+  function drawActivityProgress(vw) {
+    const progress = window.getQuizProgress?.();
+    if (!progress || !progress.total) return;
+    const boxW = Math.min(200, Math.max(150, vw * 0.2));
+    const boxH = 28;
+    const x = Math.max(16, vw - 430);
+    const y = 12;
+    const ratio = Math.max(0, Math.min(1, progress.ratio || 0));
+    const isEval = progress.mode === 'eval';
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 253, 245, 0.88)';
+    ctx.strokeStyle = isEval ? 'rgba(255, 120, 166, 0.78)' : 'rgba(85, 207, 179, 0.78)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, boxW, boxH, 10, true, true);
+
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, x + 4, y + 4, boxW - 8, boxH - 8, 8, false, false);
+    ctx.clip();
+    const fillW = Math.max(0, (boxW - 8) * ratio);
+    const grad = ctx.createLinearGradient(x, y, x + boxW, y);
+    if (isEval) {
+      grad.addColorStop(0, '#ff8bae');
+      grad.addColorStop(0.55, '#ffd978');
+      grad.addColorStop(1, '#7e57e6');
+    } else {
+      grad.addColorStop(0, '#55cfb3');
+      grad.addColorStop(0.55, '#ffd978');
+      grad.addColorStop(1, '#7e57e6');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + 4, y + 4, fillW, boxH - 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let sx = x + 4; sx < x + boxW; sx += 16) {
+      ctx.fillRect(sx, y + 4, 7, boxH - 8);
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#2f2450';
+    ctx.font = 'bold 13px "VT323", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = isEval ? 'Evaluation' : 'Lecon';
+    ctx.fillText(`${label} ${progress.answered}/${progress.total}`, x + boxW / 2, y + boxH / 2 + 1);
+    ctx.restore();
+  }
+
+  // drawItemHud removed — items are now rendered as HTML overlay on the joystick (#hud-items-ring)
+
   function drawAmmoAndHUD(camX, camY, useTextures){
     const { vw } = getCanvasSize();
     const ammoX = 14;
@@ -60,6 +110,7 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
     const ammoBoxW = 140;
     
     // Draw Level Timer (Top Right, left of Pause button)
+    drawActivityProgress(vw);
     if (typeof window.levelTimer === 'number') {
       const minutes = Math.floor(window.levelTimer / 60);
       const seconds = Math.floor(window.levelTimer % 60).toString().padStart(2, '0');
@@ -99,6 +150,8 @@ export function makeHudDraw({ ctx, assetsReady, assets, world, player, getCanvas
     ctx.textBaseline = 'middle';
     ctx.fillText(`${player.ammo || 0}`, iconX + iconSize + 12, ammoY + ammoBoxH / 2 + 1);
     ctx.restore();
+
+    // Items are rendered in #hud-items-ring DOM overlay
 
     // 1b. Draw Coins box on the top-left (below Ammo Box)
     ctx.save();

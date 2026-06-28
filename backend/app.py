@@ -66,6 +66,11 @@ def ensure_schema():
     if cols and 'lesson_fragment_id' not in cols:
         conn.execute("ALTER TABLE questions ADD COLUMN lesson_fragment_id INTEGER")
 
+    # Migration : ajouter max_attempts à worlds si absent
+    world_cols = [row[1] for row in conn.execute("PRAGMA table_info(worlds)").fetchall()]
+    if world_cols and 'max_attempts' not in world_cols:
+        conn.execute("ALTER TABLE worlds ADD COLUMN max_attempts INTEGER DEFAULT 3")
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS lesson_fragments (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,8 +254,19 @@ def enroll_student(class_id):
 
 @app.route('/api/classes/<int:class_id>/worlds', methods=['GET'])
 def get_worlds(class_id):
+    student_id = request.args.get('student_id')
     conn = get_db()
-    worlds = conn.execute("SELECT * FROM worlds WHERE class_id = ?", (class_id,)).fetchall()
+    if student_id:
+        # Fetch worlds along with the number of sessions created by the student for each world
+        query = """
+            SELECT w.*, 
+                   (SELECT COUNT(*) FROM sessions s WHERE s.world_id = w.id AND s.student_id = ?) as student_attempts
+            FROM worlds w
+            WHERE w.class_id = ?
+        """
+        worlds = conn.execute(query, (student_id, class_id)).fetchall()
+    else:
+        worlds = conn.execute("SELECT *, 0 as student_attempts FROM worlds WHERE class_id = ?", (class_id,)).fetchall()
     conn.close()
     return jsonify([dict(row) for row in worlds])
 
@@ -262,6 +278,7 @@ def create_world():
     topic = data.get('topic')
     subject = data.get('subject', 'Général')
     mode = data.get('mode', 'lesson')
+    max_attempts = int(data.get('max_attempts') or 3)
     
     if not class_id or not name or not topic:
         return jsonify({"error": "Données manquantes"}), 400
@@ -270,9 +287,9 @@ def create_world():
     last_idx = conn.execute("SELECT MAX(world_index) FROM worlds WHERE class_id = ?", (class_id,)).fetchone()[0] or 0
     
     conn.execute("""
-        INSERT INTO worlds (class_id, world_index, name, subject, topic, mode, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (class_id, last_idx + 1, name, subject, topic, mode, 1))
+        INSERT INTO worlds (class_id, world_index, name, subject, topic, mode, is_active, max_attempts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (class_id, last_idx + 1, name, subject, topic, mode, 1, max_attempts))
     conn.commit()
     world_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
@@ -286,15 +303,16 @@ def update_world(world_id):
     topic = data.get('topic')
     subject = data.get('subject', 'Général')
     mode = data.get('mode', 'lesson')
+    max_attempts = int(data.get('max_attempts') or 3)
     
     if not name or not topic:
         return jsonify({"error": "Nom et thème requis"}), 400
         
     conn = get_db()
     conn.execute("""
-        UPDATE worlds SET name = ?, topic = ?, subject = ?, mode = ?
+        UPDATE worlds SET name = ?, topic = ?, subject = ?, mode = ?, max_attempts = ?
         WHERE id = ?
-    """, (name, topic, subject, mode, world_id))
+    """, (name, topic, subject, mode, max_attempts, world_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Monde mis à jour"}), 200
