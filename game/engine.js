@@ -261,8 +261,15 @@ function loop(now){
         }
         // ── Déclencher fin si plateforme d'arrivée (goal) ──────────
         if(plat.type === 'goal'){
-          window.gameState = 'gameover';
-          window.updateMenuVisibility?.();
+          if (window.__freeMode) {
+            window.__freeMode = false;
+            window.gameState = 'menu';
+            window._prevStateBeforePause = null;
+            window.updateMenuVisibility?.();
+          } else {
+            window.gameState = 'gameover';
+            window.updateMenuVisibility?.();
+          }
         }
       }
     }
@@ -607,10 +614,10 @@ function loop(now){
         let allCollected = true;
         for (const frag of livre.fragments) {
           if (!frag.collected) {
-             if (rectsOverlap({x: frag.x - 16, y: frag.y - 16, w: 32, h: 32}, pbox)) {
-               frag.collected = true;
-               floatingAmmoTexts.push({x: frag.x, y: frag.y - 20, t: 1.0, text: '🧩 Fragment !'});
-               playCollect();
+           if (rectsOverlap({x: frag.x - 16, y: frag.y - 16, w: 32, h: 32}, pbox)) {
+                frag.collected = true;
+                floatingAmmoTexts.push({x: frag.x, y: frag.y - 20, t: 1.0, text: frag.title ? `📖 ${frag.title}` : '🧩 Fragment !'});
+                playCollect();
              } else {
                allCollected = false;
              }
@@ -651,7 +658,12 @@ function loop(now){
         livre.collected = true;
         floatingAmmoTexts.push({x: player.x, y: player.y - 20, t: 1.4, text: '📖 SAVOIR DÉBLOQUÉ !'});
         window.dispatchEvent(new CustomEvent('livre-collected', {
-          detail: { x: player.x, y: player.y }
+          detail: {
+            x: player.x,
+            y: player.y,
+            fragments: livre.fragments || null,
+            type: livre.type
+          }
         }));
       }
     }

@@ -69,6 +69,15 @@ let allActivities = [];
 let selectedActivity = null;
 let studentProfile = loadStudentProfile();
 let classStudents = [];
+let selectedFreeLevel = null;
+
+const FREE_MODE_LEVELS = [
+  { id: 1, name: 'Foret des Debuts', description: 'Apprends les bases !' },
+  { id: 2, name: 'Plaines Venteuses', description: 'Les ennemis patrouillent plus vite !' },
+  { id: 3, name: 'Cavernes Obscures', description: 'Les tireurs apparaissent... Reste vigilant !' }
+];
+
+const FREE_MODE_ACTIVITY = { id: '__free_mode__', mode: 'free', name: 'Monde Ouvert', topic: 'Jeu libre', subject: 'Sans matiere' };
 
 const SHOP_ITEMS = [
   { id: 'immunity_potion', label: 'Potion immunisation', icon: '🛡', price: 18, desc: 'Ignore les ennemis et projectiles pendant 12 secondes.' },
@@ -126,6 +135,10 @@ function saveEconomy(economy) {
 
 function addWalletCoins(amount) {
   if (!amount) return;
+  if (window.__freeMode) {
+    window.__freeModeCoins = (window.__freeModeCoins || 0) + amount;
+    return;
+  }
   const economy = loadEconomy();
   economy.wallet = Math.max(0, (economy.wallet || 0) + amount);
   saveEconomy(economy);
@@ -674,6 +687,7 @@ function showHubScreen() {
   const codeInput = document.getElementById('class-code');
   if (nameInput) nameInput.value = studentProfile?.name || '';
   if (codeInput) codeInput.value = studentProfile?.code || '';
+  renderActivities();
 }
 
 function showLoginError(msg) {
@@ -720,14 +734,12 @@ async function fetchActivities() {
     renderActivities();
     renderShopAndInventory();
   } catch (err) {
-    if (activitiesHint) {
-      activitiesHint.textContent = err.message.includes('serveur')
-        ? err.message
-        : 'Session expiree ou code invalide. Reconnecte-toi.';
-    }
-    if (activitiesList) activitiesList.innerHTML = '';
     if (err.message.includes('introuvable') || err.message.includes('serveur')) {
       showLoginScreen();
+      return;
+    }
+    if (!allActivities.length) {
+      renderActivities();
     }
   }
 }
@@ -735,17 +747,9 @@ async function fetchActivities() {
 function renderActivities() {
   if (!activitiesList) return;
 
-  if (allActivities.length === 0) {
-    activitiesHint.textContent = 'Aucune activite configuree par ton enseignant pour l\'instant.';
-    activitiesList.innerHTML = '';
-    selectedActivity = null;
-    setCharacterEnabled(false);
-    updatePlayButton();
-    return;
-  }
-
   activitiesHint.textContent = 'Selectionne une activite :';
-  activitiesList.innerHTML = allActivities.map(a => {
+
+  const teacherCards = allActivities.map(a => {
     const isEval = a.mode === 'eval';
     const badgeClass = isEval ? 'act-badge-eval' : 'act-badge-lesson';
     const badgeLabel = isEval ? 'EVALUATION' : 'LECON';
@@ -773,8 +777,19 @@ function renderActivities() {
     `;
   }).join('');
 
+  const freeSelected = selectedActivity?.id === '__free_mode__' ? ' selected' : '';
+  const freeCard = `
+    <button type="button" class="activity-card${freeSelected}" data-id="__free_mode__">
+      <h3>🏝️ Monde Ouvert</h3>
+      <p>Joue librement sans questions ni lecons</p>
+      <span class="act-badge" style="background:#8b5cf6;color:#fff;">MODE LIBRE</span>
+    </button>
+  `;
+
+  activitiesList.innerHTML = freeCard + teacherCards;
+
   activitiesList.querySelectorAll('.activity-card').forEach(card => {
-    card.addEventListener('click', () => selectActivity(parseInt(card.dataset.id, 10)));
+    card.addEventListener('click', () => selectActivity(card.dataset.id));
   });
 }
 
@@ -791,21 +806,41 @@ function setCharacterEnabled(on) {
 }
 
 function selectActivity(id) {
-  selectedActivity = allActivities.find(a => a.id === id) || null;
+  const isFreeMode = id === '__free_mode__';
+  selectedFreeLevel = null;
+
+  if (isFreeMode) {
+    selectedActivity = FREE_MODE_ACTIVITY;
+  } else {
+    selectedActivity = allActivities.find(a => a.id === parseInt(id, 10)) || null;
+  }
+
+  window.__freeMode = isFreeMode;
   renderActivities();
 
   if (!selectedActivity) {
     selectedActivityInfo?.classList.add('hidden');
+    document.getElementById('free-mode-selector')?.classList.add('hidden');
     setCharacterEnabled(false);
     updatePlayButton();
     return;
   }
 
   setCharacterEnabled(true);
+  window.gameMode = selectedActivity.mode;
+
+  if (isFreeMode) {
+    selectedActivityInfo?.classList.add('hidden');
+    document.getElementById('free-mode-selector')?.classList.remove('hidden');
+    renderFreeLevels();
+    updatePlayButton();
+    return;
+  }
+
   selectedActivityInfo?.classList.remove('hidden');
+  document.getElementById('free-mode-selector')?.classList.add('hidden');
 
   const isEval = selectedActivity.mode === 'eval';
-  window.gameMode = selectedActivity.mode;
   activityModeBadge.textContent = isEval ? 'EVALUATION' : 'LECON';
   activityModeBadge.style.background = isEval ? '#dc2626' : '#1d4ed8';
   
@@ -820,9 +855,32 @@ function selectActivity(id) {
   updatePlayButton();
 }
 
+function renderFreeLevels() {
+  const container = document.getElementById('free-levels');
+  if (!container) return;
+  container.querySelectorAll('.free-level-btn').forEach(btn => {
+    btn.classList.toggle('selected', parseInt(btn.dataset.level, 10) === selectedFreeLevel);
+  });
+}
+
+function selectFreeLevel(level) {
+  selectedFreeLevel = level;
+  renderFreeLevels();
+  updatePlayButton();
+}
+
 function updatePlayButton() {
   if (!selectedActivity) {
     if (menuPlay) menuPlay.disabled = true;
+    menuPlay.textContent = 'Jouer';
+    return;
+  }
+  
+  if (selectedActivity.id === '__free_mode__') {
+    if (menuPlay) {
+      menuPlay.disabled = !selectedFreeLevel;
+      menuPlay.textContent = selectedFreeLevel ? `Jouer (Niveau ${selectedFreeLevel})` : 'Choisis un niveau';
+    }
     return;
   }
   
@@ -886,6 +944,7 @@ document.getElementById('student-name')?.addEventListener('keydown', (e) => {
 document.getElementById('btn-role-student')?.addEventListener('click', () => {
   if (studentProfile?.name && studentProfile?.code) {
     showHubScreen();
+    renderActivities();
     fetchActivities();
   } else {
     showLoginScreen();
@@ -912,6 +971,11 @@ document.getElementById('btn-change-profile')?.addEventListener('click', () => {
   }
 });
 
+document.getElementById('free-levels')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.free-level-btn');
+  if (btn) selectFreeLevel(parseInt(btn.dataset.level, 10));
+});
+
 showRoleScreen();
 setCharacterEnabled(false);
 
@@ -919,11 +983,37 @@ setCharacterEnabled(false);
 async function startGame() {
   if (!selectedActivity) return alert('Choisis une activite d\'abord.');
 
+  const isFreeMode = selectedActivity.id === '__free_mode__';
+
+  if (isFreeMode) {
+    if (!selectedFreeLevel) return alert('Choisis un niveau pour le mode libre.');
+    window.gameMode = 'free';
+    window.currentWorldId = null;
+    setLevel(selectedFreeLevel);
+    makeLevel();
+    player.lives = 5;
+    player.ammo = 999;
+    player.coins = 0;
+    player.aiQueries = 0;
+    window.levelTimer = 9999;
+    window._prevStateBeforePause = null;
+    window.__freeModeCoins = 0;
+    window.__freeModeScore = 0;
+    window.__freeMode = true;
+    restartMusic();
+    window.gameState = 'playing';
+    import('./game/engine.js').then(mod => { if (mod?.respawn) mod.respawn(); });
+    updateMenuVisibility();
+    renderHudItemsRing();
+    return;
+  }
+
   const studentName = studentProfile?.name || 'Eleve';
   const classCode = studentProfile?.code || '';
 
   window.gameMode = selectedActivity.mode;
   window.currentWorldId = selectedActivity.id;
+  window.__freeMode = false;
 
   try {
     const studentData = await joinClass(studentName, classCode);
@@ -966,7 +1056,7 @@ async function startGame() {
   setLevel(selectedActivity.world_index || 1);
   makeLevel();
   resetRunCoinSync();
-  player.lives = 3;
+  player.lives = 5;
   player.ammo = 30;
   player.coins = 0;
   player.aiQueries = 1;
@@ -1023,7 +1113,7 @@ function updateMenuVisibility() {
     if (chatbotPanel) chatbotPanel.classList.add('hidden');
     if (bookToggle) bookToggle.style.display = 'none';
     if (bookPanel) bookPanel.classList.add('hidden');
-    if (livreOverlay) {
+    if (livreOverlay && window.gameState !== 'playing') {
       livreOverlay.classList.add('hidden');
       window.isLivreActive = false;
     }
@@ -1072,6 +1162,7 @@ menuPlay?.addEventListener('click', () => startGame());
 menuQuit?.addEventListener('click', () => {
   window.gameState = 'menu';
   window._prevStateBeforePause = null;
+  window.__freeMode = false;
   updateMenuVisibility();
   renderHudItemsRing();
 });
@@ -1221,7 +1312,6 @@ btnSummaryClose?.addEventListener('click', async () => {
 const btnGameOverSummary = document.getElementById('btn-gameover-summary');
 btnGameOverSummary?.addEventListener('click', async () => {
   document.getElementById('gameover-overlay')?.classList.add('hidden');
-  // Rafraîchir les données de l'activité avant d'afficher le bilan
   if (studentProfile?.code) {
     try { await fetchActivities(); } catch (_) {}
     if (selectedActivity) {

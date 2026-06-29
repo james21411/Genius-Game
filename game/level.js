@@ -50,6 +50,7 @@ export function makeLevel(){
   world.coins = [];
   world.livres = [];
   world.projectiles = [];
+  window.__fragmentIndex = 0;
 
   const cfg = currentLevelConfig;
   const villageCount = cfg.villageCount || 40;
@@ -243,11 +244,30 @@ export function makeLevel(){
         };
         
         if (type === 'fragments') {
-           node.fragments = [
-             { x: globalX + villageWidth * 0.2, y: y - 80 - Math.random()*80, collected: false },
-             { x: globalX + villageWidth * 0.5, y: y - 100 - Math.random()*80, collected: false },
-             { x: globalX + villageWidth * 0.8, y: y - 80 - Math.random()*80, collected: false }
-           ];
+           const lessonFrags = window.__lessonFragments || [];
+           const nextIdx = window.__fragmentIndex || 0;
+           const slice = lessonFrags.slice(nextIdx, nextIdx + 3);
+           window.__fragmentIndex = nextIdx + 3;
+
+           if (slice.length > 0 && window.gameMode === 'lesson') {
+             node.fragments = slice.map((frag, idx) => ({
+               x: globalX + villageWidth * (0.2 + idx * 0.3),
+               y: y - 80 - Math.random()*80,
+               collected: false,
+               order_index: frag.order || idx,
+               title: frag.title,
+               content: frag.content,
+               image_data: frag.image_data,
+               bloom: frag.bloom,
+               question_id: frag.question_id
+             }));
+           } else {
+             node.fragments = [
+               { x: globalX + villageWidth * 0.2, y: y - 80 - Math.random()*80, collected: false, order_index: 0 },
+               { x: globalX + villageWidth * 0.5, y: y - 100 - Math.random()*80, collected: false, order_index: 1 },
+               { x: globalX + villageWidth * 0.8, y: y - 80 - Math.random()*80, collected: false, order_index: 2 }
+             ];
+           }
            // Protect fragments with vertical saws
            for (const frag of node.fragments) {
               world.enemies.push({

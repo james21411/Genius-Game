@@ -75,6 +75,22 @@ export async function loadQuestions(worldId) {
       _questionPool = apiQuestions;
       _shufflePool();
       window.quizQuestionDifficulties = _questionPool.map(q => parseInt(q.difficulty) || 1);
+
+      // Extract lesson fragments from questions with lesson_content
+      window.__lessonFragments = apiQuestions
+        .filter(q => q.lesson_content)
+        .sort((a, b) => (a.lesson_order || 0) - (b.lesson_order || 0))
+        .map(q => ({
+          order: q.lesson_order || 0,
+          title: q.lesson_title || 'Fragment de leçon',
+          content: q.lesson_content || '',
+          image_data: q.lesson_image_data || '',
+          bloom: q.bloom_level || 'knowledge',
+          question_id: q.id
+        }));
+      window.__fragmentIndex = 0;
+      console.log(`[Quiz] ${window.__lessonFragments.length} fragments de leçon extraits`);
+
       console.log(`[Quiz] ${_questionPool.length} questions pour activite ${worldId}`);
       return true;
     }
@@ -1219,12 +1235,17 @@ export function getNextQuestionHint() {
     if (nextQ) {
       return {
         question: nextQ.question,
-        hint: nextQ.explanation || `Indice du grimoire : Révise bien le sujet de la question suivante : "${nextQ.question}"`
+        hint: nextQ.explanation || `Indice du grimoire : Révise bien le sujet de la question suivante : "${nextQ.question}"`,
+        lessonContent: nextQ.lesson_content || null,
+        lessonTitle: nextQ.lesson_title || null,
+        lessonImage: nextQ.lesson_image_data || null,
+        lessonOrder: nextQ.lesson_order || null
       };
     }
   }
   return {
     question: "Générale",
-    hint: "Indice : Récolte les pièces et les cibles pour améliorer ton score et préparer tes examens !"
+    hint: "Indice : Récolte les pièces et les cibles pour améliorer ton score et préparer tes examens !",
+    lessonContent: null
   };
 }

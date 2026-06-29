@@ -3,6 +3,54 @@ Focused module: world drawing (sky, banners, platforms, coins, enemies, overlay)
 */
 import { assetsReady, assets } from '../assets.js';
 
+const TERRAIN_TILE_W = 16;
+const TERRAIN_TILE_H = 16;
+
+let _terrainThemes = null;
+
+function buildTerrainThemes() {
+  if (_terrainThemes) return _terrainThemes;
+  const sheet = assets.terrain_sheet;
+  if (!sheet || !sheet.width) {
+    _terrainThemes = [];
+    return _terrainThemes;
+  }
+
+  const cols = Math.floor(sheet.width / TERRAIN_TILE_W);
+  const rows = Math.floor(sheet.height / TERRAIN_TILE_H);
+  const themes = [];
+
+  try {
+    const cvs = document.createElement('canvas');
+    cvs.width = sheet.width;
+    cvs.height = sheet.height;
+    const c = cvs.getContext('2d');
+    c.drawImage(sheet, 0, 0);
+    const data = c.getImageData(0, 0, sheet.width, sheet.height).data;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        let visible = false;
+        const px = col * TERRAIN_TILE_W;
+        const py = row * TERRAIN_TILE_H;
+        for (let y = 0; y < TERRAIN_TILE_H && !visible; y++) {
+          for (let x = 0; x < TERRAIN_TILE_W && !visible; x++) {
+            const idx = ((py + y) * sheet.width + (px + x)) * 4 + 3;
+            if (data[idx] > 0) visible = true;
+          }
+        }
+        if (visible) themes.push({ col, row });
+      }
+    }
+  } catch (_) {
+    // fallback: use a hardcoded safe subset
+    for (let i = 0; i < 22 && i < cols; i++) themes.push({ col: i, row: 0 });
+  }
+
+  _terrainThemes = themes;
+  return themes;
+}
+
 export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanvasSize }){
   function isVisibleRect(x, y, w, h, margin = 160){
     const { vw, vh } = getCanvasSize();
@@ -241,62 +289,77 @@ export function makeWorldDraw({ ctx, assetsReady, assets, world, player, getCanv
             ctx.shadowBlur = 0;
           }
         } else if(useTextures){
-          if(assets.terrain_sheet && assets.terrain_sheet.width){
-             const blocks = [
-               {x: 0, y: 0},     // Pierre grise
-               {x: 80, y: 0},    // Herbe
-               {x: 160, y: 0},   // Marron biseauté
-               {x: 0, y: 48},    // Bois
-               {x: 80, y: 48},   // Terre orange
-               {x: 160, y: 48},  // Gris lisse
-               {x: 224, y: 48},  // Briques rouges
-               {x: 0, y: 96},    // Temple vert
-               {x: 80, y: 96},   // Rose
-               {x: 160, y: 96},  // Orange biseauté
-               {x: 224, y: 96}   // Doré
-             ];
-             const block = blocks[theme % blocks.length];
-             const tileScale = 32; 
-             const ts = 16;
-             
-             const cols = Math.ceil(wplat / tileScale);
-             const rows = Math.ceil(hplat / tileScale);
-             
-             for(let r = 0; r < rows; r++){
-               for(let c = 0; c < cols; c++){
-                 // 9-slice picking
-                 let pickCol = (c === 0) ? 0 : ((c === cols - 1 && cols > 1) ? 2 : 1);
-                 let pickRow = (r === 0) ? 0 : ((r === rows - 1 && rows > 1) ? 2 : 1);
-                 
-                 const srcX = block.x + pickCol * ts;
-                 const srcY = block.y + pickRow * ts;
-                 
-                 const drawX = x + c * tileScale;
-                 const drawY = y + r * tileScale;
-                 // Clip drawing width/height if it exceeds platform bounds
-                 const drawW = Math.min(tileScale, x + wplat - drawX);
-                 const drawH = Math.min(tileScale, y + hplat - drawY);
-                 
-                 // If the platform is truncated, we adjust the source rectangle accordingly
-                 const sW = (drawW / tileScale) * ts;
-                 const sH = (drawH / tileScale) * ts;
-                 
-                 ctx.drawImage(assets.terrain_sheet, srcX, srcY, sW, sH, drawX, drawY, drawW, drawH);
-               }
-             }
+          const themes = buildTerrainThemes();
+          const hasValidThemes = themes.length > 0;
+          const tileScale = 32;
+          const ts = TERRAIN_TILE_W;
+
+          if (hasValidThemes) {
+            const tileIdx = theme % (themes.length + 1);
+            const isPlatformPng = tileIdx === themes.length;
+
+            if (isPlatformPng) {
+              const tex = assets.platformVariants[0];
+              if (tex && tex.width) {
+                for (let tx = 0; tx < wplat; tx += tileScale) {
+                  const drawW = Math.min(tileScale, wplat - tx);
+                  ctx.drawImage(tex, 0, 0, tex.width, tex.height, x + tx, y, drawW, hplat + 8);
+                }
+              } else {
+                ctx.fillStyle = '#776655';
+                ctx.fillRect(x, y, wplat, hplat);
+              }
+            } else {
+              const tile = themes[tileIdx % themes.length];
+              const srcX = tile.col * ts;
+              const srcY = tile.row * ts;
+              const sW = ts;
+              const sH = TERRAIN_TILE_H;
+
+              const cCount = Math.ceil(wplat / tileScale);
+              const rCount = Math.ceil(hplat / tileScale);
+
+              for (let r = 0; r < rCount; r++) {
+                for (let c = 0; c < cCount; c++) {
+                  const drawX = x + c * tileScale;
+                  const drawY = y + r * tileScale;
+                  const drawW = Math.min(tileScale, x + wplat - drawX);
+                  const drawH = Math.min(tileScale, y + hplat - drawY);
+                  const sWc = (drawW / tileScale) * sW;
+                  const sHc = (drawH / tileScale) * sH;
+                  ctx.drawImage(assets.terrain_sheet, srcX, srcY, sWc, sHc, drawX, drawY, drawW, drawH);
+                }
+              }
+            }
+          } else if (assets.terrain_sheet && assets.terrain_sheet.width) {
+            const ts2 = TERRAIN_TILE_W;
+            const cCount = Math.ceil(wplat / tileScale);
+            const rCount = Math.ceil(hplat / tileScale);
+            for (let r = 0; r < rCount; r++) {
+              for (let c = 0; c < cCount; c++) {
+                const drawX = x + c * tileScale;
+                const drawY = y + r * tileScale;
+                const drawW = Math.min(tileScale, x + wplat - drawX);
+                const drawH = Math.min(tileScale, y + hplat - drawY);
+                const srcX = (c % 22) * ts2;
+                const srcY = 0;
+                const sWc = (drawW / tileScale) * ts2;
+                const sHc = (drawH / tileScale) * TERRAIN_TILE_H;
+                ctx.drawImage(assets.terrain_sheet, srcX, srcY, sWc, sHc, drawX, drawY, drawW, drawH);
+              }
+            }
           } else {
-             const variants = assets.platformVariants.length ? assets.platformVariants : [null];
-             const tex = variants[theme % variants.length] || assets.platformVariants[0];
-             if(tex && tex.width){
-               const tileW = Math.max(32, tex.width);
-               for(let tx = 0; tx < wplat; tx += tileW){
-                 const drawW = Math.min(tileW, wplat - tx);
-                 ctx.drawImage(tex, 0, 0, tex.width, tex.height, x + tx, y, drawW, hplat + 8);
-               }
-             } else {
-               ctx.fillStyle = '#776655';
-               ctx.fillRect(x, y, wplat, hplat);
-             }
+            const variants = assets.platformVariants.length ? assets.platformVariants : [null];
+            const tex = variants[theme % variants.length] || assets.platformVariants[0];
+            if (tex && tex.width) {
+              for (let tx = 0; tx < wplat; tx += tileScale) {
+                const drawW = Math.min(tileScale, wplat - tx);
+                ctx.drawImage(tex, 0, 0, tex.width, tex.height, x + tx, y, drawW, hplat + 8);
+              }
+            } else {
+              ctx.fillStyle = '#776655';
+              ctx.fillRect(x, y, wplat, hplat);
+            }
           }
           if(plat.type === 'goal'){
             ctx.drawImage(assets.coin, x + wplat/2 - 24, y - 64, 48, 64);

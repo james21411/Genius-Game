@@ -59,9 +59,18 @@ export function draw(){
   // draw sequence
   helpers.drawSky(vw, vh);
   helpers.drawBanners(camX, vw, vh);
-  // ground
-  ctx.fillStyle = '#2f6b2f';
-  ctx.fillRect(0, vh*0.82, vw, vh*0.18);
+  // ground — utilise platform.png en motif tuilé
+  const groundTex = assetsReady() && assets.platformVariants[0];
+  if (groundTex && groundTex.width) {
+    const gt = Math.max(32, groundTex.width);
+    const gY = Math.round(vh * 0.82);
+    for (let gx = 0; gx < vw; gx += gt) {
+      ctx.drawImage(groundTex, 0, 0, groundTex.width, groundTex.height, gx, gY, gt, vh * 0.18 + 8);
+    }
+  } else {
+    ctx.fillStyle = '#2f6b2f';
+    ctx.fillRect(0, vh * 0.82, vw, vh * 0.18);
+  }
 
   const useTextures = assetsReady();
   helpers.drawPlatforms(camX, camY, useTextures);

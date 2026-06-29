@@ -737,6 +737,57 @@ canvas#game{
   border-color: rgba(180,109,32,0.28);
 }
 
+.free-mode-selector {
+  margin-top: 16px;
+  padding: 14px;
+  background: rgba(139,92,246,0.08);
+  border: 1px solid rgba(139,92,246,0.35);
+  border-radius: 10px;
+}
+.free-mode-header p {
+  font-size: 0.9375rem;
+  color: #75634f;
+  margin-top: 6px;
+}
+.free-levels {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.free-level-btn {
+  flex: 1;
+  padding: 14px 10px;
+  border: 2px solid rgba(80,54,25,0.18);
+  border-radius: 8px;
+  background: #fffdf7;
+  color: #2b2118;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  box-shadow: 0 4px 0 rgba(80,54,25,0.08);
+}
+.free-level-btn:hover {
+  border-color: #8b5cf6;
+  background: #f5f0ff;
+}
+.free-level-btn.selected {
+  border-color: #8b5cf6;
+  background: rgba(139,92,246,0.12);
+  box-shadow: 0 5px 0 rgba(139,92,246,0.2);
+}
+.free-level-btn strong {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.free-level-btn span {
+  display: block;
+  font-size: 0.8125rem;
+  color: #75634f;
+  margin-top: 4px;
+}
+
 .character-picker {
   background:
     linear-gradient(180deg, rgba(255,244,207,0.72), rgba(255,250,240,0.82)),
@@ -3093,6 +3144,21 @@ body {
 
 .grimoire-key {
   font-size: 22px;
+}
+
+.lesson-fragment-dialog-item {
+  text-align: left;
+  line-height: 1.5;
+}
+
+.lesson-fragment-dialog-item strong {
+  color: var(--gj-readable-gold, #f5c04a) !important;
+}
+
+.lesson-fragment-dialog-item p {
+  color: var(--gj-readable-offwhite, #e6e6e6) !important;
+  font-size: 14px;
+  margin: 0;
 }
 
 /* --- ROLE CHOICE + FINAL READABILITY FIX --- */
